@@ -34,46 +34,71 @@ function formatDate(d: string): string {
   return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export function generateQuotationPDF(quotation: QuotationData) {
+function loadImage(src: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => resolve("");
+    img.src = src;
+  });
+}
+
+export async function generateQuotationPDF(quotation: QuotationData) {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
 
+  const logoData = await loadImage("/logo.png");
+
   // Header background
-  doc.setFillColor(20, 20, 30);
+  doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, pageWidth, 50, "F");
 
-  // Gold accent line
-  doc.setFillColor(218, 165, 32);
+  // Red accent line (matching logo red)
+  doc.setFillColor(220, 40, 40);
   doc.rect(0, 50, pageWidth, 2, "F");
 
-  // Company name
-  doc.setTextColor(218, 165, 32);
-  doc.setFontSize(24);
-  doc.setFont("helvetica", "bold");
-  doc.text("DECIBELS", margin, 22);
-
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(180, 180, 180);
-  doc.text("AUDIO PVT LTD", margin, 29);
+  // Logo
+  if (logoData) {
+    doc.addImage(logoData, "PNG", margin, 10, 70, 10.5);
+  } else {
+    doc.setTextColor(220, 40, 40);
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.text("Decibels", margin, 22);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(80, 80, 80);
+    doc.text("AUDIO PVT LTD", margin, 29);
+  }
 
   doc.setFontSize(7);
-  doc.text("Home Theater | Automation | Acoustics", margin, 35);
-  doc.text("Mysuru, India | www.decibels.audio", margin, 41);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(120, 120, 120);
+  doc.text("Home Theater | Automation | Acoustics", margin, 38);
+  doc.text("Mysuru, India | www.decibels.audio", margin, 43);
 
   // Quotation title
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(30, 30, 30);
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
-  doc.text("QUOTATION", pageWidth - margin, 22, { align: "right" });
+  doc.text("QUOTATION", pageWidth - margin, 16, { align: "right" });
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text(quotation.quotationNumber, pageWidth - margin, 30, { align: "right" });
-  doc.text(`Date: ${formatDate(quotation.createdAt)}`, pageWidth - margin, 37, { align: "right" });
+  doc.setTextColor(80, 80, 80);
+  doc.text(quotation.quotationNumber, pageWidth - margin, 24, { align: "right" });
+  doc.text(`Date: ${formatDate(quotation.createdAt)}`, pageWidth - margin, 31, { align: "right" });
   if (quotation.validUntil) {
-    doc.text(`Valid Until: ${formatDate(quotation.validUntil)}`, pageWidth - margin, 44, { align: "right" });
+    doc.text(`Valid Until: ${formatDate(quotation.validUntil)}`, pageWidth - margin, 38, { align: "right" });
   }
 
   // Customer details
@@ -166,13 +191,13 @@ export function generateQuotationPDF(quotation: QuotationData) {
   });
 
   // Grand total line
-  doc.setFillColor(218, 165, 32);
+  doc.setFillColor(220, 40, 40);
   doc.rect(summaryX - 5, y - 2, pageWidth - margin - summaryX + 10, 0.5, "F");
   y += 5;
 
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(218, 165, 32);
+  doc.setTextColor(220, 40, 40);
   doc.text("Grand Total", summaryX, y);
   doc.text(formatINR(quotation.grandTotal), pageWidth - margin, y, { align: "right" });
 

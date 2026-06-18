@@ -196,9 +196,9 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
     setSaving(false);
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     if (!quotation) return;
-    generateQuotationPDF(quotation);
+    await generateQuotationPDF(quotation);
   };
 
   if (loading) {

@@ -8,7 +8,6 @@ import {
   Package,
   FileText,
   Users,
-  ClipboardList,
   CreditCard,
   BarChart3,
   Settings,

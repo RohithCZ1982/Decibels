@@ -57,10 +57,10 @@ In the Render service settings, go to **Environment** tab and add these variable
 | `NEXTAUTH_SECRET`    | Generate one: run `openssl rand -base64 32` in your terminal      |
 | `NEXTAUTH_URL`       | `https://decibels-audio.onrender.com` (your Render URL)           |
 | `NEXT_PUBLIC_APP_URL`| `https://decibels-audio.onrender.com`                             |
-| `NODE_ENV`           | `production`                                                      |
 
 > Replace the `DATABASE_URL` with your actual Neon connection string.
 > Replace `decibels-audio.onrender.com` with your actual Render URL after deployment.
+> Do NOT set `NODE_ENV` manually — Render sets it automatically. Setting it to `production` before the build will skip devDependencies and break the build.
 
 ---
 
