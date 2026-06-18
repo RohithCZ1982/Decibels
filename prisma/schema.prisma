@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  APPROVED
+  IN_PRODUCTION
+  COMPLETED
+  CLOSED
+}
+
+enum PaymentMode {
+  CASH
+  BANK_TRANSFER
+  UPI
+  CARD
+  CHEQUE
+  OTHER
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(STAFF)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quotations   Quotation[]
+  payments     Payment[]
+  projectNotes ProjectNote[]
+}
+
+model Category {
+  id    String @id @default(cuid())
+  name  String @unique
+  order Int    @default(0)
+  items Item[]
+}
+
+model Item {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  name        String
+  description String?
+  unitPrice   Float
+  supplier    String?
+  stock       Int?
+  imageUrl    String?
+  active      Boolean @default(true)
+
+  category   Category @relation(fields: [categoryId], references: [id])
+  categoryId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  templateItems  TemplateItem[]
+  quotationItems QuotationItem[]
+
+  @@index([categoryId])
+  @@index([name])
+}
+
+model Template {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+  active      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items      TemplateItem[]
+  quotations Quotation[]
+}
+
+model TemplateItem {
+  id       String @id @default(cuid())
+  quantity Int    @default(1)
+
+  template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId String
+  item       Item     @relation(fields: [itemId], references: [id])
+  itemId     String
+
+  @@unique([templateId, itemId])
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  mobile    String
+  email     String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quotations Quotation[]
+
+  @@index([name])
+  @@index([mobile])
+}
+
+model Quotation {
+  id              String          @id @default(cuid())
+  quotationNumber String          @unique
+  status          QuotationStatus @default(DRAFT)
+  subtotal        Float           @default(0)
+  gstPercent      Float           @default(18)
+  gstAmount       Float           @default(0)
+  discount        Float           @default(0)
+  grandTotal      Float           @default(0)
+  notes           String?
+  terms           String?
+  validUntil      DateTime?
+  completionDate  DateTime?
+
+  customer    Customer  @relation(fields: [customerId], references: [id])
+  customerId  String
+  template    Template? @relation(fields: [templateId], references: [id])
+  templateId  String?
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items        QuotationItem[]
+  payments     Payment[]
+  projectNotes ProjectNote[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model QuotationItem {
+  id        String  @id @default(cuid())
+  name      String
+  quantity  Int     @default(1)
+  unitPrice Float
+  total     Float
+  notes     String?
+  sortOrder Int     @default(0)
+
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  quotationId String
+  item        Item?     @relation(fields: [itemId], references: [id])
+  itemId      String?
+
+  @@index([quotationId])
+}
+
+model Payment {
+  id            String      @id @default(cuid())
+  amount        Float
+  date          DateTime
+  mode          PaymentMode
+  transactionId String?
+  notes         String?
+
+  quotation    Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  quotationId  String
+  recordedBy   User      @relation(fields: [recordedById], references: [id])
+  recordedById String
+
+  createdAt DateTime @default(now())
+
+  @@index([quotationId])
+}
+
+model ProjectNote {
+  id       String  @id @default(cuid())
+  content  String
+  imageUrl String?
+
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  quotationId String
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdById String
+
+  createdAt DateTime @default(now())
+
+  @@index([quotationId])
+}
