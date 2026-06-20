@@ -14,13 +14,22 @@ interface QuotationData {
   grandTotal: number;
   notes: string | null;
   terms: string | null;
-  customer: { name: string; mobile: string; email: string | null; address: string | null };
+  template?: { name: string } | null;
+  createdBy?: { name: string };
+  customer: {
+    name: string;
+    mobile: string;
+    email: string | null;
+    address: string | null;
+  };
   items: Array<{
     name: string;
     quantity: number;
+    unit?: string;
     unitPrice: number;
     total: number;
     notes: string | null;
+    item?: { code: string; category: { name: string } } | null;
   }>;
 }
 
@@ -31,7 +40,11 @@ function formatINR(n: number): string {
 }
 
 function formatDate(d: string): string {
-  return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return new Date(d).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function loadImage(src: string): Promise<string> {
@@ -51,197 +64,486 @@ function loadImage(src: string): Promise<string> {
   });
 }
 
+const RED: [number, number, number] = [180, 40, 40];
+const BLACK: [number, number, number] = [30, 30, 30];
+const GOLD: [number, number, number] = [180, 150, 50];
+
 export async function generateQuotationPDF(quotation: QuotationData) {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 20;
+  const doc = new jsPDF("p", "mm", "a4");
 
   const logoData = await loadImage("/logo.png");
 
-  // Header background
-  doc.setFillColor(255, 255, 255);
-  doc.rect(0, 0, pageWidth, 50, "F");
+  drawQuotationPage(doc, quotation, logoData);
 
-  // Red accent line (matching logo red)
-  doc.setFillColor(220, 40, 40);
-  doc.rect(0, 50, pageWidth, 2, "F");
+  doc.addPage();
+  drawTermsPage(doc);
 
-  // Logo
+  doc.save(`${quotation.quotationNumber}.pdf`);
+}
+
+function drawQuotationPage(
+  doc: jsPDF,
+  q: QuotationData,
+  logoData: string
+) {
+  const pw = 210;
+  const ml = 10;
+  const re = pw - ml;
+  const cw = pw - ml * 2;
+
+  // --- HEADER ---
   if (logoData) {
-    doc.addImage(logoData, "PNG", margin, 10, 70, 10.5);
+    doc.addImage(logoData, "PNG", ml, 6, 55, 8);
   } else {
-    doc.setTextColor(220, 40, 40);
-    doc.setFontSize(22);
-    doc.setFont("helvetica", "bold");
-    doc.text("Decibels", margin, 22);
-    doc.setFontSize(8);
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bolditalic");
+    doc.setTextColor(...RED);
+    doc.text("Decibels", ml, 12);
+    doc.setFontSize(6);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(80, 80, 80);
-    doc.text("AUDIO PVT LTD", margin, 29);
+    doc.text("a u d i o   s y s t e m s", ml, 17);
   }
 
-  doc.setFontSize(7);
+  doc.setFontSize(6);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(120, 120, 120);
-  doc.text("Home Theater | Automation | Acoustics", margin, 38);
-  doc.text("Mysuru, India | www.decibels.audio", margin, 43);
+  doc.setTextColor(60, 60, 60);
+  doc.text("#277/A, Hebbal Industrial Area, Mysuru – 570 027,", ml, 18);
+  doc.text("Karnataka, INDIA. Ph : 08212331331 Mobile: 9972449311", ml, 21.5);
+  doc.text("mani@decibelsaudio.com website: www.decibelsaudio.com", ml, 25);
 
-  // Quotation title
-  doc.setTextColor(30, 30, 30);
-  doc.setFontSize(12);
+  // 25 Years badge
+  const bx = re - 12;
+  const by = 12;
+  doc.setDrawColor(...GOLD);
+  doc.setLineWidth(1);
+  doc.circle(bx, by, 9);
+  doc.setLineWidth(0.4);
+  doc.circle(bx, by, 7.5);
+  doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text("QUOTATION", pageWidth - margin, 16, { align: "right" });
+  doc.setTextColor(...GOLD);
+  doc.text("25", bx, by + 1, { align: "center" });
+  doc.setFontSize(4);
+  doc.text("YEARS", bx, by + 4.5, { align: "center" });
 
-  doc.setFontSize(9);
+  // "Statement of Quotation"
+  doc.setFontSize(16);
+  doc.setFont("times", "bolditalic");
+  doc.setTextColor(...RED);
+  doc.text("Statement of Quotation", re, 36, { align: "right" });
+
+  // --- CUSTOMER DETAILS BOX ---
+  const custY = 42;
+  const custH = 30;
+
+  doc.setFillColor(248, 248, 238);
+  doc.rect(ml, custY, cw, custH, "F");
+  doc.setDrawColor(210, 210, 200);
+  doc.setLineWidth(0.2);
+  doc.rect(ml, custY, cw, custH, "S");
+
+  // Green tab
+  doc.setFillColor(100, 130, 85);
+  doc.rect(ml, custY, 32, 7, "F");
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(255, 255, 255);
+  doc.text("Customer Details", ml + 1.5, custY + 5);
+
+  // JOB
+  const jobX = pw / 2 + 5;
+  doc.setFontSize(7.5);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...RED);
+  doc.text("JOB :", jobX, custY + 5);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(80, 80, 80);
-  doc.text(quotation.quotationNumber, pageWidth - margin, 24, { align: "right" });
-  doc.text(`Date: ${formatDate(quotation.createdAt)}`, pageWidth - margin, 31, { align: "right" });
-  if (quotation.validUntil) {
-    doc.text(`Valid Until: ${formatDate(quotation.validUntil)}`, pageWidth - margin, 38, { align: "right" });
-  }
+  doc.setTextColor(...BLACK);
+  doc.setFontSize(6.5);
+  const jobLines = doc.splitTextToSize(
+    "We are hereby sending the quotes required for setting up a Home Theater at your place.",
+    re - jobX - 14
+  );
+  doc.text(jobLines, jobX + 14, custY + 3.5, { lineHeightFactor: 1.5 });
 
-  // Customer details
-  let y = 62;
-  doc.setTextColor(100, 100, 100);
-  doc.setFontSize(8);
-  doc.text("BILL TO", margin, y);
-
-  y += 6;
-  doc.setTextColor(30, 30, 30);
+  // Customer name & address
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
-  doc.text(quotation.customer.name, margin, y);
+  doc.setTextColor(...BLACK);
+  doc.text(q.customer.name, ml + 2, custY + 15);
 
-  y += 6;
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text(quotation.customer.mobile, margin, y);
-  if (quotation.customer.email) {
-    y += 5;
-    doc.text(quotation.customer.email, margin, y);
-  }
-  if (quotation.customer.address) {
-    y += 5;
-    const addrLines = doc.splitTextToSize(quotation.customer.address, 100);
-    doc.text(addrLines, margin, y);
-    y += addrLines.length * 4;
+  doc.text(q.customer.address || "", ml + 2, custY + 21);
+
+  // DATE & Ref
+  const dX = re - 55;
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...BLACK);
+  doc.text("DATE:", dX, custY + 20);
+  doc.setTextColor(...RED);
+  doc.text(formatDate(q.createdAt), dX + 18, custY + 20);
+
+  doc.setTextColor(...BLACK);
+  doc.text("Ref. #", dX, custY + 26);
+  doc.setTextColor(...RED);
+  doc.text(q.quotationNumber, dX + 18, custY + 26);
+
+  // --- RED TITLE BAR ---
+  const barY = custY + custH + 4;
+  doc.setFillColor(...RED);
+  doc.rect(ml, barY, cw, 8, "F");
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(255, 255, 255);
+  const titleText = q.template
+    ? `Decibels Home Theater ${q.template.name}`
+    : "Decibels Home Theater Quotation";
+  doc.text(titleText, pw / 2, barY + 5.5, { align: "center" });
+
+  // --- ITEMS TABLE ---
+  const tableY = barY + 12;
+
+  const catOrder: string[] = [];
+  const catMap = new Map<string, typeof q.items>();
+  for (const item of q.items) {
+    const cat = item.item?.category?.name || "Other";
+    if (!catMap.has(cat)) {
+      catMap.set(cat, []);
+      catOrder.push(cat);
+    }
+    catMap.get(cat)!.push(item);
   }
 
-  y += 8;
+  const groups = catOrder.map((name) => {
+    const items = catMap.get(name)!;
+    return { name, items, subtotal: items.reduce((s, i) => s + i.total, 0) };
+  });
 
-  // Items table
-  const tableData = quotation.items.map((item, idx) => [
-    (idx + 1).toString(),
-    item.name + (item.notes ? `\n${item.notes}` : ""),
-    item.quantity.toString(),
-    formatINR(item.unitPrice),
-    formatINR(item.total),
-  ]);
+  const body: string[][] = [];
+  const rowTypes: ("item" | "subtotal" | "total")[] = [];
+  let sl = 1;
+
+  for (const group of groups) {
+    for (const item of group.items) {
+      body.push([
+        sl.toString(),
+        item.name,
+        formatINR(item.unitPrice),
+        item.quantity.toString(),
+        item.unit || "No",
+        formatINR(item.total),
+        "",
+      ]);
+      rowTypes.push("item");
+      sl++;
+    }
+    body.push(["", "", "", "", "", "", formatINR(group.subtotal)]);
+    rowTypes.push("subtotal");
+  }
+
+  body.push(["", "", "", "", "", "Total", formatINR(q.grandTotal)]);
+  rowTypes.push("total");
 
   autoTable(doc, {
-    startY: y,
-    head: [["#", "Description", "Qty", "Unit Price", "Total"]],
-    body: tableData,
+    startY: tableY,
+    head: [["Sl", "Product", "Price Rs.", "Qty", "", "Amount Rs.", "Total"]],
+    body,
     theme: "plain",
     styles: {
-      fontSize: 9,
-      cellPadding: 4,
-      lineColor: [230, 230, 230],
-      lineWidth: 0.5,
-      textColor: [30, 30, 30],
+      fontSize: 8,
+      cellPadding: { top: 2.5, bottom: 2.5, left: 1.5, right: 1.5 },
+      textColor: BLACK,
+      lineWidth: 0,
     },
     headStyles: {
-      fillColor: [245, 245, 245],
-      textColor: [80, 80, 80],
+      fillColor: [255, 255, 255],
+      textColor: RED,
       fontStyle: "bold",
       fontSize: 8,
     },
     columnStyles: {
-      0: { cellWidth: 12, halign: "center" },
-      1: { cellWidth: "auto" },
-      2: { cellWidth: 18, halign: "center" },
-      3: { cellWidth: 35, halign: "right" },
-      4: { cellWidth: 35, halign: "right" },
+      0: { cellWidth: 10, halign: "center" },
+      1: { cellWidth: 78 },
+      2: { cellWidth: 24, halign: "right" },
+      3: { cellWidth: 10, halign: "center" },
+      4: { cellWidth: 14 },
+      5: { cellWidth: 27, halign: "right" },
+      6: { cellWidth: 27, halign: "right" },
     },
-    margin: { left: margin, right: margin },
+    margin: { left: ml, right: ml },
+    didParseCell: (data) => {
+      if (data.section !== "body") return;
+      const rt = rowTypes[data.row.index];
+      if (rt === "subtotal") {
+        data.cell.styles.textColor = RED;
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fontSize = 9;
+      }
+      if (rt === "total") {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fontSize = 10;
+      }
+    },
+    didDrawCell: (data) => {
+      if (data.section === "head" && data.column.index === 6) {
+        doc.setDrawColor(...RED);
+        doc.setLineWidth(0.5);
+        const ly = data.cell.y + data.cell.height;
+        doc.line(ml, ly, re, ly);
+      }
+      if (
+        data.section === "body" &&
+        rowTypes[data.row.index] === "total" &&
+        data.column.index === 0
+      ) {
+        doc.setDrawColor(...BLACK);
+        doc.setLineWidth(0.3);
+        doc.line(ml, data.cell.y, re, data.cell.y);
+      }
+    },
   });
 
-  // Summary
+  // --- NOTES & FOOTER ---
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  y = (doc as any).lastAutoTable.finalY + 10;
-  const summaryX = pageWidth - margin - 80;
+  let y = (doc as any).lastAutoTable.finalY + 6;
 
-  const summaryLines: [string, string][] = [
-    ["Subtotal", formatINR(quotation.subtotal)],
-  ];
-  if (quotation.discount > 0) {
-    summaryLines.push(["Discount", `-${formatINR(quotation.discount)}`]);
+  if (q.notes) {
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bolditalic");
+    doc.setTextColor(...RED);
+    doc.text("Note :", ml, y);
+    y += 4;
+
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(...BLACK);
+    doc.setFontSize(7);
+    for (const line of q.notes.split("\n")) {
+      if (!line.trim()) continue;
+      const wrapped = doc.splitTextToSize(line.trim(), cw - 5);
+      doc.text(wrapped, ml, y);
+      y += wrapped.length * 3.5;
+    }
   }
-  summaryLines.push([`GST (${quotation.gstPercent}%)`, formatINR(quotation.gstAmount)]);
+
+  y += 4;
+
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...BLACK);
+  const ref = "Terms And Conditions are enclosed herewith Attachment 1.";
+  doc.text(ref, ml, y);
+  const tw = doc.getTextWidth(ref);
+  doc.setDrawColor(...BLACK);
+  doc.setLineWidth(0.3);
+  doc.line(ml, y + 0.8, ml + tw, y + 0.8);
+
+  y += 5;
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.text("All Taxes Included (GST).", ml, y);
 
   doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  summaryLines.forEach(([label, value]) => {
-    doc.setTextColor(100, 100, 100);
-    doc.text(label, summaryX, y);
-    doc.setTextColor(30, 30, 30);
-    doc.text(value, pageWidth - margin, y, { align: "right" });
-    y += 6;
-  });
-
-  // Grand total line
-  doc.setFillColor(220, 40, 40);
-  doc.rect(summaryX - 5, y - 2, pageWidth - margin - summaryX + 10, 0.5, "F");
-  y += 5;
-
-  doc.setFontSize(12);
+  doc.setFont("helvetica", "italic");
+  doc.setTextColor(80, 80, 80);
+  doc.text("Authorized by", re - 40, y + 8);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(220, 40, 40);
-  doc.text("Grand Total", summaryX, y);
-  doc.text(formatINR(quotation.grandTotal), pageWidth - margin, y, { align: "right" });
+  doc.setFontSize(10);
+  doc.setTextColor(...BLACK);
+  doc.text(q.createdBy?.name || "N Manikantan Iyer", re - 40, y + 16);
+}
 
-  // Notes
-  if (quotation.notes) {
-    y += 15;
-    doc.setTextColor(100, 100, 100);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "bold");
-    doc.text("NOTES", margin, y);
-    y += 5;
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(60, 60, 60);
-    const noteLines = doc.splitTextToSize(quotation.notes, pageWidth - margin * 2);
-    doc.text(noteLines, margin, y);
-    y += noteLines.length * 4;
+function renderWrappedAfterLabel(
+  doc: jsPDF,
+  text: string,
+  x: number,
+  startY: number,
+  maxW: number,
+  labelW: number,
+  lh: number
+): number {
+  let y = startY;
+  const words = text.split(" ");
+  let line = "";
+  let first = true;
+
+  for (const word of words) {
+    const test = line ? line + " " + word : word;
+    const avail = first ? maxW - labelW : maxW;
+    if (doc.getTextWidth(test) > avail && line) {
+      if (y > 285) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.text(line, first ? x + labelW : x, y);
+      y += lh;
+      line = word;
+      first = false;
+    } else {
+      line = test;
+    }
   }
-
-  // Terms
-  if (quotation.terms) {
-    y += 10;
-    if (y > 250) {
+  if (line) {
+    if (y > 285) {
       doc.addPage();
       y = 20;
     }
-    doc.setTextColor(100, 100, 100);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "bold");
-    doc.text("TERMS & CONDITIONS", margin, y);
-    y += 5;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.setTextColor(80, 80, 80);
-    const termLines = doc.splitTextToSize(quotation.terms, pageWidth - margin * 2);
-    doc.text(termLines, margin, y);
+    doc.text(line, first ? x + labelW : x, y);
+    y += lh;
   }
+  return y;
+}
 
-  // Footer
-  const footerY = doc.internal.pageSize.getHeight() - 15;
-  doc.setFillColor(245, 245, 245);
-  doc.rect(0, footerY - 5, pageWidth, 25, "F");
-  doc.setFontSize(7);
-  doc.setTextColor(120, 120, 120);
-  doc.text("Decibels Audio Pvt Ltd | Mysuru, India | www.decibels.audio | info@decibels.audio", pageWidth / 2, footerY, { align: "center" });
+function drawTermsPage(doc: jsPDF) {
+  const ml = 15;
+  const textX = ml + 8;
+  const textW = 172;
+  const lh = 3.8;
+  let y = 20;
 
-  doc.save(`${quotation.quotationNumber}.pdf`);
+  doc.setTextColor(30, 30, 30);
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text("Terms and Conditions:", ml, y);
+  y += 8;
+
+  doc.setFontSize(8);
+
+  const terms: {
+    num: string;
+    label?: string;
+    text?: string;
+    bullets?: string[];
+  }[] = [
+    {
+      num: "1.",
+      label: "Payment",
+      bullets: [
+        "70% advance upon signing of Work Order, 20% upon delivery and Installation of the system & remaining 10% upon handing over the project.",
+        "If any delay in payment beyond the credit period as above said will be charged a late payment fee of 5% of the amount due at a prorate basis for first 30 days, after completion of 30 days interest @ 18% per annum will be levied on outstanding payment.",
+      ],
+    },
+    {
+      num: "2.",
+      label: "Warranty",
+      text: "As per manufacturer Terms and Conditions.",
+    },
+    {
+      num: "3.",
+      label: "Designs and drawings",
+      text: "Any changes in proposed Design and drawing will be charged extra either in pre-approval or during execution of work accordingly.",
+    },
+    {
+      num: "4.",
+      text: "Work site should be ready to start work at the time of confirmation of work and free from other contractor’s interference.",
+    },
+    {
+      num: "5.",
+      label: "Material availability",
+      text: "If import application, 6-8 weeks from the date of Advance.",
+    },
+    {
+      num: "6.",
+      label: "Project completion",
+      text: "Project completion Report will be issued during commissioning and handing over of project upon 100% payment settled.",
+    },
+    {
+      num: "7.",
+      label: "Acoustics",
+      text: "The Quotation for Acoustics included only for room Acoustics treatment, does not include any kind of Sound proofing.",
+    },
+    {
+      num: "8.",
+      label: "Taxation",
+      text: "As per government law.",
+    },
+    {
+      num: "9.",
+      text: "Indemnification to the fullest extent permitted by law, buyer shall defend, indemnify and hold seller harmless from any and all claims, demands, subrogation claims by buyer, causes of action, controversies, liabilities, fines, regulatory actions, seizures of equipment, losses, costs, expenses arising from or in connection with claims asserted against seller for any damage, environmental liability, patent and/or intellectual property infringement resulting from property damage, delay or failure in delivery of the goods or any other claims, whether in negligence, tort, contract, or otherwise, relating to this terms and conditions.",
+    },
+    {
+      num: "10.",
+      text: "Buyer should not do modification or alteration of the goods.",
+    },
+    {
+      num: "11.",
+      label: "Force Majeure",
+      text: "Seller shall have no liability or obligation to Buyer of any kind, including, but not limited to, any obligation to deliver Goods as a result of causes, conduct or occurrences beyond Seller’s reasonable control, including, but not limited to, commercial impracticability, fire, flood, act of war, terrorism, civil disorder or disobedience, act of public enemies, problems associated with transportation (including car or truck shortages), acts or failure to act of any state, federal or foreign governmental or regulatory authorities, labor disputes, strikes, or failure of suppliers to make timely deliveries of materials, goods or services to Seller.",
+    },
+    {
+      num: "12.",
+      label: "Termination",
+      text: "Seller may at is full discretion at any time terminate any order related to this Agreement in whole or in part by written notice to Buyer if any dispute arise.",
+    },
+    {
+      num: "13.",
+      label: "Alternative Dispute Resolution",
+      text: "Any and all disputes, complaints, controversies, claims and grievances arising under, out of, in connection with, or in any manner related to this Agreement or the relationship of parties hereunder shall be settled by Indian Law.",
+    },
+    {
+      num: "14.",
+      label: "Interpretation",
+      text: "All rights granted to Seller herein shall be in addition to and not in lieu of Seller’s rights by operation of the law. No modification of this Agreement or any other provision of the contract shall be valid unless in writing and signed by Seller.",
+    },
+  ];
+
+  for (const term of terms) {
+    if (y > 275) {
+      doc.addPage();
+      y = 20;
+    }
+
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(30, 30, 30);
+    doc.text(term.num, ml, y);
+
+    if (term.label) {
+      doc.setFont("helvetica", "bolditalic");
+      const labelStr = term.label + ": ";
+      doc.text(labelStr, textX, y);
+
+      if (term.text) {
+        const labelW = doc.getTextWidth(labelStr);
+        doc.setFont("helvetica", "italic");
+        y = renderWrappedAfterLabel(doc, term.text, textX, y, textW, labelW, lh);
+      } else {
+        y += lh;
+      }
+    } else if (term.text) {
+      doc.setFont("helvetica", "italic");
+      const lines = doc.splitTextToSize(term.text, textW);
+      for (const l of lines) {
+        if (y > 285) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(l, textX, y);
+        y += lh;
+      }
+    }
+
+    if (term.bullets) {
+      for (const bullet of term.bullets) {
+        if (y > 280) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.setFont("helvetica", "italic");
+        doc.text("•", textX + 2, y);
+        const bLines = doc.splitTextToSize(bullet, textW - 8);
+        for (const bl of bLines) {
+          if (y > 285) {
+            doc.addPage();
+            y = 20;
+          }
+          doc.text(bl, textX + 6, y);
+          y += lh;
+        }
+        y += 0.5;
+      }
+    }
+
+    y += 1.5;
+  }
 }

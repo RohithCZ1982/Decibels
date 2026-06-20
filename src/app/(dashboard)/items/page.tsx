@@ -35,6 +35,8 @@ interface Item {
   code: string;
   name: string;
   description: string | null;
+  hsnCode: string | null;
+  gstRate: number;
   unitPrice: number;
   supplier: string | null;
   stock: number | null;
@@ -49,6 +51,8 @@ const emptyForm = {
   name: "",
   categoryId: "",
   unitPrice: "",
+  hsnCode: "",
+  gstRate: "18",
   description: "",
   supplier: "",
   stock: "",
@@ -116,6 +120,8 @@ export default function ItemsPage() {
       name: item.name,
       categoryId: item.categoryId,
       unitPrice: item.unitPrice.toString(),
+      hsnCode: item.hsnCode || "",
+      gstRate: item.gstRate.toString(),
       description: item.description || "",
       supplier: item.supplier || "",
       stock: item.stock?.toString() || "",
@@ -216,6 +222,32 @@ export default function ItemsPage() {
                     onChange={(e) => setForm({ ...form, unitPrice: e.target.value })}
                     placeholder="25000"
                   />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>HSN Code</Label>
+                  <Input
+                    value={form.hsnCode}
+                    onChange={(e) => setForm({ ...form, hsnCode: e.target.value })}
+                    placeholder="e.g. 85184000"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>GST Rate (%)</Label>
+                  <Select
+                    value={form.gstRate}
+                    onValueChange={(v: string | null) => setForm({ ...form, gstRate: v || "18" })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0" label="0%">0%</SelectItem>
+                      <SelectItem value="5" label="5%">5%</SelectItem>
+                      <SelectItem value="12" label="12%">12%</SelectItem>
+                      <SelectItem value="18" label="18%">18%</SelectItem>
+                      <SelectItem value="28" label="28%">28%</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               <div className="space-y-2">
@@ -347,10 +379,14 @@ export default function ItemsPage() {
                           {item.code}
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-3 mt-1">
+                      <div className="flex items-center gap-3 mt-1 flex-wrap">
                         <Badge variant="secondary" className="text-[10px]">
                           {item.category.name}
                         </Badge>
+                        {item.hsnCode && (
+                          <span className="text-xs text-muted-foreground">HSN: {item.hsnCode}</span>
+                        )}
+                        <span className="text-xs text-muted-foreground">GST: {item.gstRate}%</span>
                         {item.supplier && (
                           <span className="text-xs text-muted-foreground">{item.supplier}</span>
                         )}

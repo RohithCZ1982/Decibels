@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return withAuth(async () => {
     const body = await request.json();
-    const { code, name, categoryId, unitPrice, description, supplier, stock, imageUrl } = body;
+    const { code, name, categoryId, unitPrice, description, supplier, stock, imageUrl, hsnCode, gstRate } = body;
 
     if (!code || !name || !categoryId || unitPrice == null) {
       return errorResponse("Code, name, category, and unit price are required");
@@ -58,7 +58,11 @@ export async function POST(request: NextRequest) {
     if (existing) return errorResponse("Item code already exists");
 
     const item = await prisma.item.create({
-      data: { code, name, categoryId, unitPrice: parseFloat(unitPrice), description, supplier, stock: stock ? parseInt(stock) : null, imageUrl },
+      data: {
+        code, name, categoryId, unitPrice: parseFloat(unitPrice),
+        description, supplier, stock: stock ? parseInt(stock) : null, imageUrl,
+        hsnCode: hsnCode || null, gstRate: gstRate != null ? parseFloat(gstRate) : 18,
+      },
       include: { category: true },
     });
     return jsonResponse(item, 201);

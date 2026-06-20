@@ -15,7 +15,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   return withAuth(async () => {
     const { id } = await params;
     const body = await request.json();
-    const { code, name, categoryId, unitPrice, description, supplier, stock, imageUrl, active } = body;
+    const { code, name, categoryId, unitPrice, description, supplier, stock, imageUrl, active, hsnCode, gstRate } = body;
 
     const existing = await prisma.item.findUnique({ where: { id } });
     if (!existing) return errorResponse("Item not found", 404);
@@ -37,6 +37,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         ...(stock !== undefined && { stock: stock ? parseInt(stock) : null }),
         ...(imageUrl !== undefined && { imageUrl }),
         ...(active !== undefined && { active }),
+        ...(hsnCode !== undefined && { hsnCode: hsnCode || null }),
+        ...(gstRate !== undefined && { gstRate: parseFloat(gstRate) }),
       },
       include: { category: true },
     });

@@ -57,6 +57,8 @@ model Item {
   code        String  @unique
   name        String
   description String?
+  hsnCode     String?
+  gstRate     Float   @default(18)
   unitPrice   Float
   supplier    String?
   stock       Int?
@@ -154,6 +156,7 @@ model QuotationItem {
   id        String  @id @default(cuid())
   name      String
   quantity  Int     @default(1)
+  unit      String  @default("No")
   unitPrice Float
   total     Float
   notes     String?
