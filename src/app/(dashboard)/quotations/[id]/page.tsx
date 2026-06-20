@@ -43,6 +43,7 @@ import { generateQuotationPDF } from "@/lib/pdf-generator";
 interface QuotationDetail {
   id: string;
   quotationNumber: string;
+  title: string | null;
   status: string;
   subtotal: number;
   gstPercent: number;
@@ -60,8 +61,10 @@ interface QuotationDetail {
   items: Array<{
     id: string;
     name: string;
+    hsnCode: string | null;
     quantity: number;
     unitPrice: number;
+    gstRate: number;
     total: number;
     notes: string | null;
     item: { code: string; category: { name: string } } | null;
@@ -230,6 +233,9 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
                 {quotation.status.replace("_", " ")}
               </Badge>
             </div>
+            {quotation.title && (
+              <p className="text-sm font-medium text-primary mt-0.5">{quotation.title}</p>
+            )}
             <p className="text-sm text-muted-foreground mt-0.5">
               Created {formatDate(quotation.createdAt)} by {quotation.createdBy.name}
             </p>
@@ -303,7 +309,18 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
             {quotation.discount > 0 && (
               <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span>-{formatINR(quotation.discount)}</span></div>
             )}
-            <div className="flex justify-between"><span className="text-muted-foreground">GST ({quotation.gstPercent}%)</span><span>{formatINR(quotation.gstAmount)}</span></div>
+            {(() => {
+              const gstMap = new Map<number, number>();
+              const discRatio = quotation.subtotal > 0 ? (quotation.subtotal - quotation.discount) / quotation.subtotal : 1;
+              for (const it of quotation.items) {
+                const taxable = it.total * discRatio;
+                gstMap.set(it.gstRate, (gstMap.get(it.gstRate) || 0) + (taxable * it.gstRate) / 100);
+              }
+              const entries = Array.from(gstMap.entries()).sort((a, b) => a[0] - b[0]);
+              return entries.map(([rate, amt]) => (
+                <div key={rate} className="flex justify-between"><span className="text-muted-foreground">GST @{rate}%</span><span>{formatINR(amt)}</span></div>
+              ));
+            })()}
             <Separator />
             <div className="flex justify-between font-bold text-base"><span>Grand Total</span><span className="text-primary">{formatINR(quotation.grandTotal)}</span></div>
             <Separator />
@@ -348,8 +365,10 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
                 <tr className="border-b text-muted-foreground">
                   <th className="text-left py-2 pr-4">#</th>
                   <th className="text-left py-2 pr-4">Item</th>
+                  <th className="text-left py-2 pr-4">HSN</th>
                   <th className="text-right py-2 pr-4">Qty</th>
                   <th className="text-right py-2 pr-4">Unit Price</th>
+                  <th className="text-right py-2 pr-4">GST</th>
                   <th className="text-right py-2">Total</th>
                 </tr>
               </thead>
@@ -364,8 +383,10 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
                       )}
                       {item.notes && <p className="text-xs text-muted-foreground mt-0.5">{item.notes}</p>}
                     </td>
+                    <td className="py-2.5 pr-4 text-xs text-muted-foreground">{item.hsnCode || "—"}</td>
                     <td className="py-2.5 pr-4 text-right">{item.quantity}</td>
                     <td className="py-2.5 pr-4 text-right">{formatINR(item.unitPrice)}</td>
+                    <td className="py-2.5 pr-4 text-right text-muted-foreground">{item.gstRate}%</td>
                     <td className="py-2.5 text-right font-medium">{formatINR(item.total)}</td>
                   </tr>
                 ))}

@@ -21,6 +21,8 @@ interface Item {
   id: string;
   code: string;
   name: string;
+  hsnCode: string | null;
+  gstRate: number;
   unitPrice: number;
   category: { name: string };
 }
@@ -41,8 +43,10 @@ interface Template {
 interface LineItem {
   key: string;
   name: string;
+  hsnCode: string;
   quantity: number;
   unitPrice: number;
+  gstRate: number;
   itemId: string | null;
   notes: string;
 }
@@ -56,6 +60,10 @@ function nextKey() {
   return `li-${++keyCounter}`;
 }
 
+function emptyLineItem(): LineItem {
+  return { key: nextKey(), name: "", hsnCode: "", quantity: 1, unitPrice: 0, gstRate: 18, itemId: null, notes: "" };
+}
+
 export default function NewQuotationPage() {
   const router = useRouter();
   const [allItems, setAllItems] = useState<Item[]>([]);
@@ -64,12 +72,12 @@ export default function NewQuotationPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const [quotationTitle, setQuotationTitle] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState("");
-  const [lineItems, setLineItems] = useState<LineItem[]>([{ key: nextKey(), name: "", quantity: 1, unitPrice: 0, itemId: null, notes: "" }]);
-  const [gstPercent, setGstPercent] = useState("18");
+  const [lineItems, setLineItems] = useState<LineItem[]>([emptyLineItem()]);
   const [discount, setDiscount] = useState("0");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("1. Prices are valid for 30 days from the date of quotation.\n2. 50% advance payment required to confirm the order.\n3. Balance payment due before installation.\n4. Installation timeline: 4-6 weeks from order confirmation.\n5. 1-year warranty on all equipment and installation.");
@@ -100,7 +108,7 @@ export default function NewQuotationPage() {
   const handleTemplateChange = (templateId: string) => {
     setSelectedTemplate(templateId);
     if (templateId === "none") {
-      setLineItems([{ key: nextKey(), name: "", quantity: 1, unitPrice: 0, itemId: null, notes: "" }]);
+      setLineItems([emptyLineItem()]);
       return;
     }
     const template = templates.find((t) => t.id === templateId);
@@ -109,8 +117,10 @@ export default function NewQuotationPage() {
         template.items.map((ti) => ({
           key: nextKey(),
           name: ti.item.name,
+          hsnCode: ti.item.hsnCode || "",
           quantity: ti.quantity,
           unitPrice: ti.item.unitPrice,
+          gstRate: ti.item.gstRate,
           itemId: ti.item.id,
           notes: "",
         }))
@@ -119,7 +129,7 @@ export default function NewQuotationPage() {
   };
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { key: nextKey(), name: "", quantity: 1, unitPrice: 0, itemId: null, notes: "" }]);
+    setLineItems([...lineItems, emptyLineItem()]);
   };
 
   const removeLineItem = (idx: number) => {
@@ -136,7 +146,14 @@ export default function NewQuotationPage() {
 
   const selectItemForLine = (idx: number, item: Item) => {
     const updated = [...lineItems];
-    updated[idx] = { ...updated[idx], name: item.name, unitPrice: item.unitPrice, itemId: item.id };
+    updated[idx] = {
+      ...updated[idx],
+      name: item.name,
+      hsnCode: item.hsnCode || "",
+      unitPrice: item.unitPrice,
+      gstRate: item.gstRate,
+      itemId: item.id,
+    };
     setLineItems(updated);
     setActiveAutocomplete(null);
     setItemSearchValues({});
@@ -151,10 +168,24 @@ export default function NewQuotationPage() {
   };
 
   const subtotal = lineItems.reduce((sum, li) => sum + li.quantity * li.unitPrice, 0);
-  const gst = parseFloat(gstPercent) || 0;
   const disc = parseFloat(discount) || 0;
-  const gstAmount = ((subtotal - disc) * gst) / 100;
-  const grandTotal = subtotal - disc + gstAmount;
+
+  // Compute GST breakdown by rate
+  const gstBreakdown: { rate: number; taxable: number; gst: number }[] = [];
+  const rateMap = new Map<number, number>();
+  for (const li of lineItems) {
+    if (li.unitPrice <= 0) continue;
+    const lineTotal = li.quantity * li.unitPrice;
+    rateMap.set(li.gstRate, (rateMap.get(li.gstRate) || 0) + lineTotal);
+  }
+  const discountRatio = subtotal > 0 ? (subtotal - disc) / subtotal : 1;
+  for (const [rate, total] of rateMap) {
+    const taxable = total * discountRatio;
+    gstBreakdown.push({ rate, taxable, gst: (taxable * rate) / 100 });
+  }
+  gstBreakdown.sort((a, b) => a.rate - b.rate);
+  const totalGst = gstBreakdown.reduce((s, g) => s + g.gst, 0);
+  const grandTotal = subtotal - disc + totalGst;
 
   const handleSubmit = async () => {
     const validItems = lineItems.filter((li) => li.name && li.unitPrice > 0);
@@ -198,14 +229,17 @@ export default function NewQuotationPage() {
       body: JSON.stringify({
         customerId: custId,
         templateId: selectedTemplate && selectedTemplate !== "none" ? selectedTemplate : null,
+        title: quotationTitle || null,
         items: validItems.map((li) => ({
           name: li.name,
+          hsnCode: li.hsnCode || null,
           quantity: li.quantity,
           unitPrice: li.unitPrice,
+          gstRate: li.gstRate,
           itemId: li.itemId,
           notes: li.notes,
         })),
-        gstPercent: gst,
+        gstPercent: 0,
         discount: disc,
         notes,
         terms,
@@ -238,7 +272,7 @@ export default function NewQuotationPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 max-w-6xl">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="w-5 h-5" />
@@ -248,6 +282,20 @@ export default function NewQuotationPage() {
           <p className="text-sm text-muted-foreground mt-0.5">Create a new project quotation</p>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Quotation Name</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Input
+            value={quotationTitle}
+            onChange={(e) => setQuotationTitle(e.target.value)}
+            placeholder="e.g. 7.1.2 Baffle Screen Home Theater Platinum"
+          />
+          <p className="text-xs text-muted-foreground mt-1.5">This name appears on the PDF title bar</p>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -268,7 +316,7 @@ export default function NewQuotationPage() {
                     onFocus={() => setShowCustomerDropdown(true)}
                   />
                   {showCustomerDropdown && filteredCustomers.length > 0 && (
-                    <div className="absolute z-20 w-full mt-1 border rounded-lg bg-popover shadow-lg max-h-48 overflow-y-auto">
+                    <div className="absolute z-50 w-full mt-1 border rounded-lg bg-popover shadow-lg max-h-48 overflow-y-auto">
                       {filteredCustomers.map((c) => (
                         <button
                           key={c.id}
@@ -329,7 +377,7 @@ export default function NewQuotationPage() {
         </Card>
       </div>
 
-      <Card>
+      <Card className="overflow-visible">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Line Items</CardTitle>
           <Button variant="outline" size="sm" onClick={addLineItem}>
@@ -338,68 +386,91 @@ export default function NewQuotationPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            <div className="grid grid-cols-[1fr_80px_120px_120px_40px] gap-2 text-xs font-medium text-muted-foreground px-1">
+            <div className="grid grid-cols-[1fr_70px_110px_70px_110px_40px] gap-2 text-xs font-medium text-muted-foreground px-1">
               <span>Item Name</span>
               <span>Qty</span>
               <span>Unit Price</span>
+              <span>GST %</span>
               <span>Total</span>
               <span></span>
             </div>
             {lineItems.map((li, idx) => (
-              <div key={li.key} className="grid grid-cols-[1fr_80px_120px_120px_40px] gap-2 items-start">
-                <div className="relative">
+              <div key={li.key} className="space-y-1">
+                <div className="grid grid-cols-[1fr_70px_110px_70px_110px_40px] gap-2 items-start">
+                  <div className="relative">
+                    <Input
+                      placeholder="Type 3+ chars to search..."
+                      value={activeAutocomplete === idx ? (itemSearchValues[idx] ?? li.name) : li.name}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setItemSearchValues({ ...itemSearchValues, [idx]: val });
+                        setActiveAutocomplete(idx);
+                        updateLineItem(idx, "name", val);
+                        updateLineItem(idx, "itemId", null);
+                        updateLineItem(idx, "hsnCode", "");
+                      }}
+                      onFocus={() => setActiveAutocomplete(idx)}
+                      onBlur={() => setTimeout(() => setActiveAutocomplete(null), 200)}
+                    />
+                    {activeAutocomplete === idx && getFilteredItems(itemSearchValues[idx] ?? li.name).length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 border rounded-lg bg-popover shadow-xl max-h-60 overflow-y-auto">
+                        {getFilteredItems(itemSearchValues[idx] ?? li.name).map((item) => (
+                          <button
+                            key={item.id}
+                            className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent border-b border-border/30 last:border-0"
+                            onMouseDown={(e) => { e.preventDefault(); selectItemForLine(idx, item); }}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <span className="font-medium">{item.name}</span>
+                                <span className="text-muted-foreground ml-1.5">({item.code})</span>
+                              </div>
+                              <span className="text-primary font-medium ml-2 shrink-0">{formatINR(item.unitPrice)}</span>
+                            </div>
+                            <div className="flex gap-3 mt-0.5 text-xs text-muted-foreground">
+                              {item.hsnCode && <span>HSN: {item.hsnCode}</span>}
+                              <span>GST: {item.gstRate}%</span>
+                              <span>{item.category.name}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <Input
-                    placeholder="Type 3+ chars to search..."
-                    value={activeAutocomplete === idx ? (itemSearchValues[idx] ?? li.name) : li.name}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setItemSearchValues({ ...itemSearchValues, [idx]: val });
-                      setActiveAutocomplete(idx);
-                      updateLineItem(idx, "name", val);
-                      updateLineItem(idx, "itemId", null);
-                    }}
-                    onFocus={() => setActiveAutocomplete(idx)}
-                    onBlur={() => setTimeout(() => setActiveAutocomplete(null), 200)}
+                    type="number"
+                    min={1}
+                    value={li.quantity}
+                    onChange={(e) => updateLineItem(idx, "quantity", parseInt(e.target.value) || 1)}
+                    className="text-center"
                   />
-                  {activeAutocomplete === idx && getFilteredItems(itemSearchValues[idx] ?? li.name).length > 0 && (
-                    <div className="absolute z-20 w-full mt-1 border rounded-lg bg-popover shadow-lg max-h-48 overflow-y-auto">
-                      {getFilteredItems(itemSearchValues[idx] ?? li.name).map((item) => (
-                        <button
-                          key={item.id}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex justify-between"
-                          onMouseDown={(e) => { e.preventDefault(); selectItemForLine(idx, item); }}
-                        >
-                          <span>{item.name} <span className="text-muted-foreground">({item.code})</span></span>
-                          <span className="text-primary">{formatINR(item.unitPrice)}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <Input
+                    type="number"
+                    value={li.unitPrice}
+                    onChange={(e) => updateLineItem(idx, "unitPrice", parseFloat(e.target.value) || 0)}
+                  />
+                  <Input
+                    type="number"
+                    value={li.gstRate}
+                    onChange={(e) => updateLineItem(idx, "gstRate", parseFloat(e.target.value) || 0)}
+                    className="text-center"
+                  />
+                  <div className="h-9 flex items-center px-3 bg-muted/50 rounded-md text-sm font-medium">
+                    {formatINR(li.quantity * li.unitPrice)}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 hover:text-destructive"
+                    onClick={() => removeLineItem(idx)}
+                    disabled={lineItems.length <= 1}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
-                <Input
-                  type="number"
-                  min={1}
-                  value={li.quantity}
-                  onChange={(e) => updateLineItem(idx, "quantity", parseInt(e.target.value) || 1)}
-                  className="text-center"
-                />
-                <Input
-                  type="number"
-                  value={li.unitPrice}
-                  onChange={(e) => updateLineItem(idx, "unitPrice", parseFloat(e.target.value) || 0)}
-                />
-                <div className="h-9 flex items-center px-3 bg-muted/50 rounded-md text-sm font-medium">
-                  {formatINR(li.quantity * li.unitPrice)}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 hover:text-destructive"
-                  onClick={() => removeLineItem(idx)}
-                  disabled={lineItems.length <= 1}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+                {li.hsnCode && (
+                  <p className="text-[10px] text-muted-foreground pl-1">HSN: {li.hsnCode}</p>
+                )}
               </div>
             ))}
           </div>
@@ -441,19 +512,18 @@ export default function NewQuotationPage() {
                 onChange={(e) => setDiscount(e.target.value)}
               />
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground flex-1">GST %</span>
-              <Input
-                type="number"
-                className="w-32 h-8 text-right"
-                value={gstPercent}
-                onChange={(e) => setGstPercent(e.target.value)}
-              />
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">GST Amount</span>
-              <span>{formatINR(gstAmount)}</span>
-            </div>
+            {gstBreakdown.map((g) => (
+              <div key={g.rate} className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">GST @{g.rate}%</span>
+                <span>{formatINR(g.gst)}</span>
+              </div>
+            ))}
+            {gstBreakdown.length > 1 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Total GST</span>
+                <span className="font-medium">{formatINR(totalGst)}</span>
+              </div>
+            )}
             <div className="border-t pt-3 flex items-center justify-between">
               <span className="font-semibold text-lg">Grand Total</span>
               <span className="font-bold text-2xl text-primary">{formatINR(grandTotal)}</span>

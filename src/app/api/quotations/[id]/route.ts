@@ -40,16 +40,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         return sum + item.quantity * item.unitPrice;
       }, 0);
 
-      const gst = gstPercent ?? existing.gstPercent;
       const disc = discount ?? existing.discount;
-      const gstAmount = ((subtotal - disc) * gst) / 100;
+      const discountRatio = subtotal > 0 ? (subtotal - disc) / subtotal : 1;
+      let gstAmount = 0;
+      for (const item of items as { quantity: number; unitPrice: number; gstRate?: number }[]) {
+        const lineTotal = item.quantity * item.unitPrice;
+        const rate = item.gstRate ?? 18;
+        gstAmount += (lineTotal * discountRatio * rate) / 100;
+      }
+      gstAmount = Math.round(gstAmount);
       const grandTotal = subtotal - disc + gstAmount;
 
       const quotation = await prisma.quotation.update({
         where: { id },
         data: {
           subtotal,
-          gstPercent: gst,
+          gstPercent: 0,
           gstAmount,
           discount: disc,
           grandTotal,
@@ -57,11 +63,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           terms,
           validUntil: validUntil ? new Date(validUntil) : undefined,
           items: {
-            create: items.map((item: { name: string; quantity: number; unit?: string; unitPrice: number; itemId?: string; notes?: string }, idx: number) => ({
+            create: items.map((item: { name: string; hsnCode?: string; quantity: number; unit?: string; unitPrice: number; gstRate?: number; itemId?: string; notes?: string }, idx: number) => ({
               name: item.name,
+              hsnCode: item.hsnCode || null,
               quantity: item.quantity,
               unit: item.unit || "No",
               unitPrice: item.unitPrice,
+              gstRate: item.gstRate ?? 18,
               total: item.quantity * item.unitPrice,
               itemId: item.itemId || null,
               notes: item.notes || null,

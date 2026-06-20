@@ -122,6 +122,7 @@ model Customer {
 model Quotation {
   id              String          @id @default(cuid())
   quotationNumber String          @unique
+  title           String?
   status          QuotationStatus @default(DRAFT)
   subtotal        Float           @default(0)
   gstPercent      Float           @default(18)
@@ -155,9 +156,11 @@ model Quotation {
 model QuotationItem {
   id        String  @id @default(cuid())
   name      String
+  hsnCode   String?
   quantity  Int     @default(1)
   unit      String  @default("No")
   unitPrice Float
+  gstRate   Float   @default(18)
   total     Float
   notes     String?
   sortOrder Int     @default(0)

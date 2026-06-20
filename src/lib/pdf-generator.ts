@@ -14,6 +14,7 @@ interface QuotationData {
   grandTotal: number;
   notes: string | null;
   terms: string | null;
+  title?: string | null;
   template?: { name: string } | null;
   createdBy?: { name: string };
   customer: {
@@ -197,9 +198,11 @@ function drawQuotationPage(
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(255, 255, 255);
-  const titleText = q.template
-    ? `Decibels Home Theater ${q.template.name}`
-    : "Decibels Home Theater Quotation";
+  const titleText = q.title
+    ? `Decibels Home Theater ${q.title}`
+    : q.template
+      ? `Decibels Home Theater ${q.template.name}`
+      : "Decibels Home Theater Quotation";
   doc.text(titleText, pw / 2, barY + 5.5, { align: "center" });
 
   // --- ITEMS TABLE ---
