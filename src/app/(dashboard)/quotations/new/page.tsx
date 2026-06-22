@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Search, ArrowLeft, Save } from "lucide-react";
+import { Plus, Trash2, Search, ArrowLeft, Save, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 interface Item {
@@ -135,6 +135,14 @@ export default function NewQuotationPage() {
   const removeLineItem = (idx: number) => {
     if (lineItems.length <= 1) return;
     setLineItems(lineItems.filter((_, i) => i !== idx));
+  };
+
+  const moveLineItem = (idx: number, direction: "up" | "down") => {
+    const target = direction === "up" ? idx - 1 : idx + 1;
+    if (target < 0 || target >= lineItems.length) return;
+    const updated = [...lineItems];
+    [updated[idx], updated[target]] = [updated[target], updated[idx]];
+    setLineItems(updated);
   };
 
   const updateLineItem = (idx: number, field: keyof LineItem, value: string | number | null) => {
@@ -386,17 +394,18 @@ export default function NewQuotationPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            <div className="grid grid-cols-[1fr_70px_110px_70px_110px_40px] gap-2 text-xs font-medium text-muted-foreground px-1">
+            <div className="grid grid-cols-[1fr_70px_110px_70px_110px_36px_40px] gap-2 text-xs font-medium text-muted-foreground px-1">
               <span>Item Name</span>
               <span>Qty</span>
               <span>Unit Price</span>
               <span>GST %</span>
               <span>Total</span>
               <span></span>
+              <span></span>
             </div>
             {lineItems.map((li, idx) => (
               <div key={li.key} className="space-y-1">
-                <div className="grid grid-cols-[1fr_70px_110px_70px_110px_40px] gap-2 items-start">
+                <div className="grid grid-cols-[1fr_70px_110px_70px_110px_36px_40px] gap-2 items-start">
                   <div className="relative">
                     <Input
                       placeholder="Type 3+ chars to search..."
@@ -457,6 +466,26 @@ export default function NewQuotationPage() {
                   />
                   <div className="h-9 flex items-center px-3 bg-muted/50 rounded-md text-sm font-medium">
                     {formatINR(li.quantity * li.unitPrice)}
+                  </div>
+                  <div className="flex flex-col">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-[18px] w-9 hover:text-primary"
+                      onClick={() => moveLineItem(idx, "up")}
+                      disabled={idx === 0}
+                    >
+                      <ChevronUp className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-[18px] w-9 hover:text-primary"
+                      onClick={() => moveLineItem(idx, "down")}
+                      disabled={idx === lineItems.length - 1}
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </Button>
                   </div>
                   <Button
                     variant="ghost"
