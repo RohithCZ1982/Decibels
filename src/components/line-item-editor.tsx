@@ -10,6 +10,7 @@ export interface LineItem {
   name: string;
   hsnCode: string;
   quantity: number;
+  unit: string;
   unitPrice: number;
   gstRate: number;
   itemId: string | null;
@@ -23,7 +24,10 @@ export interface CatalogItem {
   hsnCode: string | null;
   gstRate: number;
   unitPrice: number;
+  unit?: string;
+  brand?: string | null;
   category: { name: string };
+  subCategory?: { name: string } | null;
 }
 
 let keyCounter = 0;
@@ -32,7 +36,7 @@ export function nextLineItemKey() {
 }
 
 export function emptyLineItem(): LineItem {
-  return { key: nextLineItemKey(), name: "", hsnCode: "", quantity: 1, unitPrice: 0, gstRate: 18, itemId: null, notes: "" };
+  return { key: nextLineItemKey(), name: "", hsnCode: "", quantity: 1, unit: "No", unitPrice: 0, gstRate: 18, itemId: null, notes: "" };
 }
 
 function formatINR(n: number) {
@@ -81,6 +85,7 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
       hsnCode: item.hsnCode || "",
       unitPrice: item.unitPrice,
       gstRate: item.gstRate,
+      unit: item.unit || "No",
       itemId: item.id,
     };
     setLineItems(updated);
@@ -147,9 +152,10 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
                         <span className="text-primary font-medium ml-2 shrink-0">{formatINR(item.unitPrice)}</span>
                       </div>
                       <div className="flex gap-3 mt-0.5 text-xs text-muted-foreground">
-                        {item.hsnCode && <span>HSN: {item.hsnCode}</span>}
-                        <span>GST: {item.gstRate}%</span>
+                        {item.brand && <span>{item.brand}</span>}
                         <span>{item.category.name}</span>
+                        {item.subCategory && <span>{item.subCategory.name}</span>}
+                        <span>GST: {item.gstRate}%</span>
                       </div>
                     </button>
                   ))}

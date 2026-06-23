@@ -1,14 +1,28 @@
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
+import XLSX from "xlsx";
+import path from "path";
 import "dotenv/config";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
+function stripHtml(html: string | undefined | null): string | null {
+  if (!html) return null;
+  return html.replace(/<[^>]*>/g, "").trim() || null;
+}
+
+function parseGstRate(tax: string | undefined | null): number {
+  if (!tax) return 18;
+  const match = tax.match(/(\d+)/);
+  return match ? parseInt(match[1]) : 18;
+}
+
 async function main() {
   console.log("Seeding database...");
 
+  // --- Users ---
   const adminPassword = await bcrypt.hash("admin123", 12);
   const admin = await prisma.user.upsert({
     where: { email: "admin@decibels.audio" },
@@ -35,162 +49,91 @@ async function main() {
   });
   console.log("Created staff user:", staff.email);
 
-  const categories = await Promise.all([
-    prisma.category.upsert({ where: { name: "Speakers" }, update: {}, create: { name: "Speakers", order: 1 } }),
-    prisma.category.upsert({ where: { name: "Subwoofers" }, update: {}, create: { name: "Subwoofers", order: 2 } }),
-    prisma.category.upsert({ where: { name: "Projectors" }, update: {}, create: { name: "Projectors", order: 3 } }),
-    prisma.category.upsert({ where: { name: "Screens" }, update: {}, create: { name: "Screens", order: 4 } }),
-    prisma.category.upsert({ where: { name: "AV Receivers" }, update: {}, create: { name: "AV Receivers", order: 5 } }),
-    prisma.category.upsert({ where: { name: "Acoustics" }, update: {}, create: { name: "Acoustics", order: 6 } }),
-    prisma.category.upsert({ where: { name: "Seating" }, update: {}, create: { name: "Seating", order: 7 } }),
-    prisma.category.upsert({ where: { name: "Automation" }, update: {}, create: { name: "Automation", order: 8 } }),
-    prisma.category.upsert({ where: { name: "Wiring & Cables" }, update: {}, create: { name: "Wiring & Cables", order: 9 } }),
-    prisma.category.upsert({ where: { name: "Labor & Installation" }, update: {}, create: { name: "Labor & Installation", order: 10 } }),
-  ]);
-  console.log("Created", categories.length, "categories");
+  // --- Parse Excel ---
+  const filePath = path.join(__dirname, "../resources/Products list.xlsx");
+  const workbook = XLSX.readFile(filePath);
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet);
+  console.log(`Parsed ${rows.length} rows from Excel`);
 
-  const items = [
-    { code: "SPK-001", name: "JBL Synthesis SCL-3", unitPrice: 85000, categoryName: "Speakers", supplier: "Harman International", description: "In-wall LCR speaker with 2x 8\" woofers" },
-    { code: "SPK-002", name: "JBL Synthesis SCL-2", unitPrice: 65000, categoryName: "Speakers", supplier: "Harman International", description: "In-wall surround speaker" },
-    { code: "SPK-003", name: "KEF Ci160ER", unitPrice: 35000, categoryName: "Speakers", supplier: "KEF Audio", description: "In-ceiling Atmos speaker" },
-    { code: "SPK-004", name: "Sonance VP66R", unitPrice: 28000, categoryName: "Speakers", supplier: "Sonance", description: "In-ceiling round speaker pair" },
-    { code: "SPK-005", name: "Bowers & Wilkins CWM7.3 S2", unitPrice: 120000, categoryName: "Speakers", supplier: "B&W Group", description: "Premium in-wall speaker" },
-    { code: "SUB-001", name: "JBL Synthesis SSW-1", unitPrice: 250000, categoryName: "Subwoofers", supplier: "Harman International", description: "Dual 15\" in-wall subwoofer" },
-    { code: "SUB-002", name: "SVS SB-4000", unitPrice: 145000, categoryName: "Subwoofers", supplier: "SVS Audio", description: "13.5\" sealed subwoofer" },
-    { code: "SUB-003", name: "REL S/510", unitPrice: 180000, categoryName: "Subwoofers", supplier: "REL Acoustics", description: "10\" reference subwoofer" },
-    { code: "PRJ-001", name: "Sony VPL-XW7000ES", unitPrice: 1500000, categoryName: "Projectors", supplier: "Sony India", description: "Native 4K SXRD laser projector" },
-    { code: "PRJ-002", name: "JVC DLA-NZ8", unitPrice: 850000, categoryName: "Projectors", supplier: "JVC India", description: "8K e-Shift D-ILA projector" },
-    { code: "PRJ-003", name: "Epson EH-LS12000B", unitPrice: 450000, categoryName: "Projectors", supplier: "Epson India", description: "4K laser projector" },
-    { code: "SCR-001", name: "Stewart Filmscreen 120\" AT", unitPrice: 350000, categoryName: "Screens", supplier: "Stewart Filmscreen", description: "120\" acoustically transparent fixed frame" },
-    { code: "SCR-002", name: "Screen Innovations 110\" AT", unitPrice: 250000, categoryName: "Screens", supplier: "Screen Innovations", description: "110\" acoustically transparent" },
-    { code: "SCR-003", name: "Elite Screens 100\" Fixed", unitPrice: 45000, categoryName: "Screens", supplier: "Elite Screens India", description: "100\" fixed frame screen" },
-    { code: "AVR-001", name: "Denon AVC-X8500HA", unitPrice: 600000, categoryName: "AV Receivers", supplier: "Denon India", description: "13.2ch 8K AV Amplifier" },
-    { code: "AVR-002", name: "Marantz SR8015", unitPrice: 350000, categoryName: "AV Receivers", supplier: "Marantz", description: "11.2ch 8K AV Receiver" },
-    { code: "AVR-003", name: "Denon AVR-X3800H", unitPrice: 180000, categoryName: "AV Receivers", supplier: "Denon India", description: "9.4ch 8K AV Receiver" },
-    { code: "ACU-001", name: "Acoustic Panel Set (Room)", unitPrice: 85000, categoryName: "Acoustics", supplier: "Decibels Audio", description: "Custom acoustic treatment package per room" },
-    { code: "ACU-002", name: "Bass Trap Set (4 corners)", unitPrice: 35000, categoryName: "Acoustics", supplier: "Decibels Audio", description: "Corner bass traps set of 4" },
-    { code: "ACU-003", name: "Acoustic Fabric Walls", unitPrice: 120000, categoryName: "Acoustics", supplier: "Decibels Audio", description: "Full room fabric wall treatment" },
-    { code: "ACU-004", name: "Star Ceiling Panel", unitPrice: 75000, categoryName: "Acoustics", supplier: "Decibels Audio", description: "Fiber optic star ceiling with acoustic backing" },
-    { code: "SET-001", name: "Recliner Seat (Premium)", unitPrice: 95000, categoryName: "Seating", supplier: "Fortress Seating", description: "Premium leather power recliner with cup holders" },
-    { code: "SET-002", name: "Recliner Seat (Standard)", unitPrice: 55000, categoryName: "Seating", supplier: "Octane Seating", description: "Standard theater recliner" },
-    { code: "AUT-001", name: "Control4 EA-3 System", unitPrice: 180000, categoryName: "Automation", supplier: "Control4 India", description: "Home automation controller" },
-    { code: "AUT-002", name: "Lutron Caseta Lighting Kit", unitPrice: 45000, categoryName: "Automation", supplier: "Lutron India", description: "Smart lighting control package" },
-    { code: "AUT-003", name: "Universal Remote MX-990", unitPrice: 85000, categoryName: "Automation", supplier: "URC", description: "Premium universal remote" },
-    { code: "WIR-001", name: "Speaker Cable Package", unitPrice: 25000, categoryName: "Wiring & Cables", supplier: "AudioQuest", description: "Complete speaker wiring for standard room" },
-    { code: "WIR-002", name: "HDMI 2.1 Cable Set", unitPrice: 15000, categoryName: "Wiring & Cables", supplier: "AudioQuest", description: "Set of 3 certified HDMI 2.1 cables" },
-    { code: "WIR-003", name: "Conduit & Cable Management", unitPrice: 18000, categoryName: "Wiring & Cables", supplier: "Decibels Audio", description: "Complete conduit and cable routing" },
-    { code: "LAB-001", name: "Basic Installation", unitPrice: 50000, categoryName: "Labor & Installation", supplier: "Decibels Audio", description: "Standard room installation labor" },
-    { code: "LAB-002", name: "Premium Installation", unitPrice: 120000, categoryName: "Labor & Installation", supplier: "Decibels Audio", description: "Premium installation with custom work" },
-    { code: "LAB-003", name: "Acoustic Design & Calibration", unitPrice: 35000, categoryName: "Labor & Installation", supplier: "Decibels Audio", description: "Room acoustic design and system calibration" },
-  ];
+  // --- Categories ---
+  const categoryNames = [...new Set(rows.map((r) => r["CATEGORY"] as string).filter(Boolean))];
+  const categoryMap = new Map<string, string>();
+  let order = 1;
+  for (const name of categoryNames) {
+    const cat = await prisma.category.upsert({
+      where: { name },
+      update: {},
+      create: { name, order: order++ },
+    });
+    categoryMap.set(name, cat.id);
+  }
+  console.log(`Created ${categoryMap.size} categories`);
 
-  for (const item of items) {
-    const cat = categories.find((c) => c.name === item.categoryName);
-    if (!cat) continue;
+  // --- SubCategories ---
+  const subCatPairs = new Set<string>();
+  const subCatMap = new Map<string, string>();
+  for (const row of rows) {
+    const cat = row["CATEGORY"] as string;
+    const sub = row["SUB-CATEGORY"] != null ? String(row["SUB-CATEGORY"]) : null;
+    if (cat && sub) {
+      const key = `${cat}|||${sub}`;
+      if (!subCatPairs.has(key)) {
+        subCatPairs.add(key);
+        const categoryId = categoryMap.get(cat)!;
+        const subCat = await prisma.subCategory.create({
+          data: { name: sub, categoryId },
+        });
+        subCatMap.set(key, subCat.id);
+      }
+    }
+  }
+  console.log(`Created ${subCatMap.size} sub-categories`);
+
+  // --- Items ---
+  let created = 0;
+  for (const row of rows) {
+    const categoryName = row["CATEGORY"] as string;
+    if (!categoryName) continue;
+
+    const categoryId = categoryMap.get(categoryName);
+    if (!categoryId) continue;
+
+    const subCatName = row["SUB-CATEGORY"] != null ? String(row["SUB-CATEGORY"]) : null;
+    const subCategoryId = subCatName ? subCatMap.get(`${categoryName}|||${subCatName}`) ?? null : null;
+
+    const sku = row["SKU (Leave blank to auto generate sku)"] as string;
+    if (!sku) continue;
+
+    const code = String(sku).padStart(4, "0");
+
     await prisma.item.upsert({
-      where: { code: item.code },
+      where: { code },
       update: {},
       create: {
-        code: item.code,
-        name: item.name,
-        unitPrice: item.unitPrice,
-        categoryId: cat.id,
-        supplier: item.supplier,
-        description: item.description,
+        code,
+        name: (row["NAME"] as string) || "Unnamed",
+        brand: (row["BRAND"] as string) || null,
+        unit: (row["UNIT"] as string) || "Pc(s)",
+        description: stripHtml(row["PRODUCT DESCRIPTION"] as string),
+        imageUrl: (row["IMAGE"] as string) || null,
+        gstRate: parseGstRate(row["APPLICABLE TAX"] as string),
+        taxType: ((row["Selling Price Tax Type (inclusive or exclusive)"] as string) || "exclusive").toLowerCase(),
+        unitPrice: (row["SELLING PRICE"] as number) || 0,
+        purchasePrice: (row["PURCHASE PRICE (Excluding tax)"] as number) || null,
+        purchasePriceInclTax: (row["PURCHASE PRICE (Including tax)"] as number) || null,
+        profitMargin: (row["PROFIT MARGIN"] as number) ?? null,
+        manageStock: row["MANAGE STOCK (1=yes 0=No)"] === 1,
+        alertQuantity: (row["ALERT QUANTITY"] as number) || 0,
+        categoryId,
+        subCategoryId,
       },
     });
+    created++;
   }
-  console.log("Created", items.length, "items");
+  console.log(`Created ${created} items`);
 
-  const allItems = await prisma.item.findMany();
-  const getItem = (code: string) => allItems.find((i) => i.code === code);
-
-  const basic51 = await prisma.template.upsert({
-    where: { name: "Basic 5.1 Home Theater" },
-    update: {},
-    create: {
-      name: "Basic 5.1 Home Theater",
-      description: "Entry-level 5.1 surround sound home theater setup with quality equipment",
-      items: {
-        create: [
-          { itemId: getItem("SPK-004")!.id, quantity: 3 },
-          { itemId: getItem("SPK-002")!.id, quantity: 2 },
-          { itemId: getItem("SUB-002")!.id, quantity: 1 },
-          { itemId: getItem("PRJ-003")!.id, quantity: 1 },
-          { itemId: getItem("SCR-003")!.id, quantity: 1 },
-          { itemId: getItem("AVR-003")!.id, quantity: 1 },
-          { itemId: getItem("ACU-001")!.id, quantity: 1 },
-          { itemId: getItem("WIR-001")!.id, quantity: 1 },
-          { itemId: getItem("WIR-002")!.id, quantity: 1 },
-          { itemId: getItem("LAB-001")!.id, quantity: 1 },
-        ],
-      },
-    },
-  });
-
-  const premium724 = await prisma.template.upsert({
-    where: { name: "Premium 7.2.4 Dolby Atmos Setup" },
-    update: {},
-    create: {
-      name: "Premium 7.2.4 Dolby Atmos Setup",
-      description: "Full Dolby Atmos experience with premium equipment and acoustic treatment",
-      items: {
-        create: [
-          { itemId: getItem("SPK-001")!.id, quantity: 3 },
-          { itemId: getItem("SPK-002")!.id, quantity: 4 },
-          { itemId: getItem("SPK-003")!.id, quantity: 4 },
-          { itemId: getItem("SUB-001")!.id, quantity: 2 },
-          { itemId: getItem("PRJ-002")!.id, quantity: 1 },
-          { itemId: getItem("SCR-001")!.id, quantity: 1 },
-          { itemId: getItem("AVR-001")!.id, quantity: 1 },
-          { itemId: getItem("ACU-001")!.id, quantity: 1 },
-          { itemId: getItem("ACU-002")!.id, quantity: 1 },
-          { itemId: getItem("ACU-003")!.id, quantity: 1 },
-          { itemId: getItem("ACU-004")!.id, quantity: 1 },
-          { itemId: getItem("SET-001")!.id, quantity: 6 },
-          { itemId: getItem("AUT-001")!.id, quantity: 1 },
-          { itemId: getItem("AUT-002")!.id, quantity: 1 },
-          { itemId: getItem("WIR-001")!.id, quantity: 2 },
-          { itemId: getItem("WIR-002")!.id, quantity: 1 },
-          { itemId: getItem("WIR-003")!.id, quantity: 1 },
-          { itemId: getItem("LAB-002")!.id, quantity: 1 },
-          { itemId: getItem("LAB-003")!.id, quantity: 1 },
-        ],
-      },
-    },
-  });
-
-  const mediaRoom = await prisma.template.upsert({
-    where: { name: "Media Room with Acoustics" },
-    update: {},
-    create: {
-      name: "Media Room with Acoustics",
-      description: "Multi-purpose media room with proper acoustic treatment and automation",
-      items: {
-        create: [
-          { itemId: getItem("SPK-005")!.id, quantity: 3 },
-          { itemId: getItem("SPK-002")!.id, quantity: 2 },
-          { itemId: getItem("SPK-003")!.id, quantity: 2 },
-          { itemId: getItem("SUB-003")!.id, quantity: 1 },
-          { itemId: getItem("PRJ-001")!.id, quantity: 1 },
-          { itemId: getItem("SCR-002")!.id, quantity: 1 },
-          { itemId: getItem("AVR-002")!.id, quantity: 1 },
-          { itemId: getItem("ACU-001")!.id, quantity: 1 },
-          { itemId: getItem("ACU-004")!.id, quantity: 1 },
-          { itemId: getItem("SET-002")!.id, quantity: 4 },
-          { itemId: getItem("AUT-002")!.id, quantity: 1 },
-          { itemId: getItem("AUT-003")!.id, quantity: 1 },
-          { itemId: getItem("WIR-001")!.id, quantity: 1 },
-          { itemId: getItem("WIR-002")!.id, quantity: 1 },
-          { itemId: getItem("LAB-002")!.id, quantity: 1 },
-          { itemId: getItem("LAB-003")!.id, quantity: 1 },
-        ],
-      },
-    },
-  });
-
-  console.log("Created templates:", basic51.name, ",", premium724.name, ",", mediaRoom.name);
-
+  // --- Sample Customers ---
   const customer1 = await prisma.customer.upsert({
     where: { id: "sample-customer-1" },
     update: {},
@@ -214,7 +157,6 @@ async function main() {
       address: "15, Vijayanagar 2nd Stage, Mysuru 570017",
     },
   });
-
   console.log("Created sample customers:", customer1.name, ",", customer2.name);
 
   console.log("\nSeed complete!");

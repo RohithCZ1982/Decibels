@@ -6,7 +6,10 @@ export async function GET() {
   return withAuth(async () => {
     const categories = await prisma.category.findMany({
       orderBy: { order: "asc" },
-      include: { _count: { select: { items: true } } },
+      include: {
+        _count: { select: { items: true } },
+        subCategories: { orderBy: { name: "asc" } },
+      },
     });
     return jsonResponse(categories);
   });

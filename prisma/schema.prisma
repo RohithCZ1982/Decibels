@@ -46,10 +46,22 @@ model User {
 }
 
 model Category {
-  id    String @id @default(cuid())
-  name  String @unique
-  order Int    @default(0)
-  items Item[]
+  id            String        @id @default(cuid())
+  name          String        @unique
+  order         Int           @default(0)
+  items         Item[]
+  subCategories SubCategory[]
+}
+
+model SubCategory {
+  id         String   @id @default(cuid())
+  name       String
+  category   Category @relation(fields: [categoryId], references: [id])
+  categoryId String
+  items      Item[]
+
+  @@unique([name, categoryId])
+  @@index([categoryId])
 }
 
 model Item {
@@ -58,15 +70,29 @@ model Item {
   name        String
   description String?
   hsnCode     String?
-  gstRate     Float   @default(18)
-  unitPrice   Float
-  supplier    String?
-  stock       Int?
-  imageUrl    String?
-  active      Boolean @default(true)
+  brand       String?
+  unit        String  @default("Pc(s)")
 
-  category   Category @relation(fields: [categoryId], references: [id])
-  categoryId String
+  gstRate  Float  @default(18)
+  taxType  String @default("exclusive")
+
+  unitPrice            Float
+  purchasePrice        Float?
+  purchasePriceInclTax Float?
+  profitMargin         Float?
+
+  manageStock   Boolean @default(false)
+  alertQuantity Int     @default(0)
+  stock         Int?
+
+  supplier String?
+  imageUrl String?
+  active   Boolean @default(true)
+
+  category      Category     @relation(fields: [categoryId], references: [id])
+  categoryId    String
+  subCategory   SubCategory? @relation(fields: [subCategoryId], references: [id])
+  subCategoryId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -75,7 +101,9 @@ model Item {
   quotationItems QuotationItem[]
 
   @@index([categoryId])
+  @@index([subCategoryId])
   @@index([name])
+  @@index([brand])
 }
 
 model Template {

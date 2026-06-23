@@ -27,6 +27,9 @@ async function main() {
   const items = await prisma.item.deleteMany({});
   console.log("Deleted", items.count, "items");
 
+  const subCategories = await prisma.subCategory.deleteMany({});
+  console.log("Deleted", subCategories.count, "sub-categories");
+
   const categories = await prisma.category.deleteMany({});
   console.log("Deleted", categories.count, "categories");
 

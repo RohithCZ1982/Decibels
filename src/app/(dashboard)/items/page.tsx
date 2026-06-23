@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,10 +24,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, Search, Edit2, Trash2, Package } from "lucide-react";
 import { toast } from "sonner";
 
+interface SubCategory {
+  id: string;
+  name: string;
+  categoryId: string;
+}
+
 interface Category {
   id: string;
   name: string;
   _count?: { items: number };
+  subCategories?: SubCategory[];
 }
 
 interface Item {
@@ -36,26 +43,45 @@ interface Item {
   name: string;
   description: string | null;
   hsnCode: string | null;
+  brand: string | null;
+  unit: string;
   gstRate: number;
+  taxType: string;
   unitPrice: number;
-  supplier: string | null;
+  purchasePrice: number | null;
+  purchasePriceInclTax: number | null;
+  profitMargin: number | null;
+  manageStock: boolean;
+  alertQuantity: number;
   stock: number | null;
+  supplier: string | null;
   imageUrl: string | null;
   active: boolean;
   category: Category;
   categoryId: string;
+  subCategory: SubCategory | null;
+  subCategoryId: string | null;
 }
 
 const emptyForm = {
   code: "",
   name: "",
+  brand: "",
   categoryId: "",
+  subCategoryId: "",
+  unit: "Pc(s)",
   unitPrice: "",
+  purchasePrice: "",
+  purchasePriceInclTax: "",
+  profitMargin: "",
   hsnCode: "",
   gstRate: "18",
+  taxType: "exclusive",
   description: "",
   supplier: "",
   stock: "",
+  manageStock: false,
+  alertQuantity: "0",
   imageUrl: "",
 };
 
@@ -68,6 +94,8 @@ export default function ItemsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>("all");
+  const [selectedBrand, setSelectedBrand] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -75,13 +103,24 @@ export default function ItemsPage() {
   const [saving, setSaving] = useState(false);
   const [newCategory, setNewCategory] = useState("");
   const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newSubCategory, setNewSubCategory] = useState("");
+  const [showNewSubCategory, setShowNewSubCategory] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+
+  const brands = Array.from(new Set(items.map((i) => i.brand).filter(Boolean))) as string[];
+
+  const filterSubCategories = categories.find((c) => c.id === selectedCategory)?.subCategories || [];
+
+  const formSubCategories = categories.find((c) => c.id === form.categoryId)?.subCategories || [];
 
   const loadData = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams({ search, page: page.toString(), limit: "20" });
     if (selectedCategory && selectedCategory !== "all") params.set("categoryId", selectedCategory);
+    if (selectedSubCategory && selectedSubCategory !== "all") params.set("subCategoryId", selectedSubCategory);
+    if (selectedBrand && selectedBrand !== "all") params.set("brand", selectedBrand);
 
     const [itemsRes, catsRes] = await Promise.all([
       fetch(`/api/items?${params}`),
@@ -92,9 +131,10 @@ export default function ItemsPage() {
 
     setItems(itemsData.items || []);
     setTotalPages(itemsData.totalPages || 1);
+    setTotalItems(itemsData.total || 0);
     setCategories(catsData);
     setLoading(false);
-  }, [search, selectedCategory, page]);
+  }, [search, selectedCategory, selectedSubCategory, selectedBrand, page]);
 
   useEffect(() => {
     loadData();
@@ -103,6 +143,8 @@ export default function ItemsPage() {
   const openNew = async () => {
     setEditingItem(null);
     setForm(emptyForm);
+    setShowNewCategory(false);
+    setShowNewSubCategory(false);
     setDialogOpen(true);
     try {
       const res = await fetch("/api/items/next-code");
@@ -115,16 +157,27 @@ export default function ItemsPage() {
 
   const openEdit = (item: Item) => {
     setEditingItem(item);
+    setShowNewCategory(false);
+    setShowNewSubCategory(false);
     setForm({
       code: item.code,
       name: item.name,
+      brand: item.brand || "",
       categoryId: item.categoryId,
+      subCategoryId: item.subCategoryId || "",
+      unit: item.unit || "Pc(s)",
       unitPrice: item.unitPrice.toString(),
+      purchasePrice: item.purchasePrice?.toString() || "",
+      purchasePriceInclTax: item.purchasePriceInclTax?.toString() || "",
+      profitMargin: item.profitMargin?.toString() || "",
       hsnCode: item.hsnCode || "",
       gstRate: item.gstRate.toString(),
+      taxType: item.taxType || "exclusive",
       description: item.description || "",
       supplier: item.supplier || "",
       stock: item.stock?.toString() || "",
+      manageStock: item.manageStock,
+      alertQuantity: item.alertQuantity.toString(),
       imageUrl: item.imageUrl || "",
     });
     setDialogOpen(true);
@@ -132,7 +185,7 @@ export default function ItemsPage() {
 
   const handleSave = async () => {
     if (!form.code || !form.name || !form.categoryId || !form.unitPrice) {
-      toast.error("Code, name, category, and unit price are required");
+      toast.error("Code, name, category, and selling price are required");
       return;
     }
     setSaving(true);
@@ -153,7 +206,27 @@ export default function ItemsPage() {
       catId = cat.id;
     }
 
-    const payload = { ...form, categoryId: catId };
+    let subCatId = form.subCategoryId;
+    if (subCatId === "__new__" && newSubCategory && catId !== "__new__") {
+      const subRes = await fetch("/api/subcategories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newSubCategory, categoryId: catId }),
+      });
+      if (!subRes.ok) {
+        toast.error("Failed to create sub-category");
+        setSaving(false);
+        return;
+      }
+      const sub = await subRes.json();
+      subCatId = sub.id;
+    }
+
+    const payload = {
+      ...form,
+      categoryId: catId,
+      subCategoryId: subCatId || null,
+    };
     const url = editingItem ? `/api/items/${editingItem.id}` : "/api/items";
     const method = editingItem ? "PUT" : "POST";
 
@@ -167,7 +240,9 @@ export default function ItemsPage() {
       toast.success(editingItem ? "Item updated" : "Item created");
       setDialogOpen(false);
       setShowNewCategory(false);
+      setShowNewSubCategory(false);
       setNewCategory("");
+      setNewSubCategory("");
       loadData();
     } else {
       const data = await res.json();
@@ -190,7 +265,9 @@ export default function ItemsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Master Database</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage products, services, and equipment</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {totalItems > 0 ? `${totalItems} products` : "Manage products, services, and equipment"}
+          </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger>
@@ -199,119 +276,278 @@ export default function ItemsPage() {
               Add Item
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingItem ? "Edit Item" : "Add New Item"}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 mt-2">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Item Code *</Label>
-                  <Input
-                    value={form.code}
-                    onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
-                    placeholder={editingItem ? "" : "Auto-generated..."}
-                    className={!editingItem && form.code ? "text-muted-foreground" : ""}
-                  />
+            <div className="space-y-6 mt-2">
+              {/* Basic Info */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Basic Info</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Item Code *</Label>
+                    <Input
+                      value={form.code}
+                      onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                      placeholder={editingItem ? "" : "Auto-generated..."}
+                    />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label>Name *</Label>
+                    <Input
+                      value={form.name}
+                      onChange={(e) => setForm({ ...form, name: e.target.value })}
+                      placeholder="Product name"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Unit Price (INR) *</Label>
-                  <Input
-                    type="number"
-                    value={form.unitPrice}
-                    onChange={(e) => setForm({ ...form, unitPrice: e.target.value })}
-                    placeholder="25000"
-                  />
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Brand</Label>
+                    <Input
+                      value={form.brand}
+                      onChange={(e) => setForm({ ...form, brand: e.target.value })}
+                      placeholder="e.g. YAMAHA"
+                      list="brand-list"
+                    />
+                    <datalist id="brand-list">
+                      {brands.map((b) => (
+                        <option key={b} value={b} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Category *</Label>
+                    <Select
+                      value={form.categoryId}
+                      onValueChange={(v: string | null) => {
+                        const val = v || "";
+                        setForm({ ...form, categoryId: val, subCategoryId: "" });
+                        setShowNewCategory(val === "__new__");
+                        setShowNewSubCategory(false);
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                      <SelectContent>
+                        {categories.map((c) => (
+                          <SelectItem key={c.id} value={c.id} label={c.name}>{c.name}</SelectItem>
+                        ))}
+                        <SelectItem value="__new__" label="+ New Category">+ New Category</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {showNewCategory && (
+                      <Input
+                        value={newCategory}
+                        onChange={(e) => setNewCategory(e.target.value)}
+                        placeholder="New category name"
+                        className="mt-2"
+                      />
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Sub-Category</Label>
+                    <Select
+                      value={form.subCategoryId || "none"}
+                      onValueChange={(v: string | null) => {
+                        const val = v || "none";
+                        setForm({ ...form, subCategoryId: val === "none" ? "" : val });
+                        setShowNewSubCategory(val === "__new__");
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Select sub-category" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none" label="None">None</SelectItem>
+                        {formSubCategories.map((s) => (
+                          <SelectItem key={s.id} value={s.id} label={s.name}>{s.name}</SelectItem>
+                        ))}
+                        <SelectItem value="__new__" label="+ New Sub-Category">+ New Sub-Category</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {showNewSubCategory && (
+                      <Input
+                        value={newSubCategory}
+                        onChange={(e) => setNewSubCategory(e.target.value)}
+                        placeholder="New sub-category name"
+                        className="mt-2"
+                      />
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Unit</Label>
+                    <Select
+                      value={form.unit}
+                      onValueChange={(v: string | null) => setForm({ ...form, unit: v || "Pc(s)" })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Pc(s)" label="Pc(s)">Pc(s)</SelectItem>
+                        <SelectItem value="PAIR" label="PAIR">PAIR</SelectItem>
+                        <SelectItem value="PKG" label="PKG">PKG</SelectItem>
+                        <SelectItem value="Mtr" label="Mtr">Mtr</SelectItem>
+                        <SelectItem value="Sq Ft" label="Sq Ft">Sq Ft</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label>Description</Label>
+                    <Textarea
+                      value={form.description}
+                      onChange={(e) => setForm({ ...form, description: e.target.value })}
+                      placeholder="Describe this product..."
+                      rows={2}
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>HSN Code</Label>
-                  <Input
-                    value={form.hsnCode}
-                    onChange={(e) => setForm({ ...form, hsnCode: e.target.value })}
-                    placeholder="e.g. 85184000"
-                  />
+
+              {/* Pricing */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Pricing</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Selling Price (INR) *</Label>
+                    <Input
+                      type="number"
+                      value={form.unitPrice}
+                      onChange={(e) => setForm({ ...form, unitPrice: e.target.value })}
+                      placeholder="25000"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Purchase Price (Excl. Tax)</Label>
+                    <Input
+                      type="number"
+                      value={form.purchasePrice}
+                      onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Purchase Price (Incl. Tax)</Label>
+                    <Input
+                      type="number"
+                      value={form.purchasePriceInclTax}
+                      onChange={(e) => setForm({ ...form, purchasePriceInclTax: e.target.value })}
+                      placeholder="0"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>GST Rate (%)</Label>
-                  <Select
-                    value={form.gstRate}
-                    onValueChange={(v: string | null) => setForm({ ...form, gstRate: v || "18" })}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0" label="0%">0%</SelectItem>
-                      <SelectItem value="5" label="5%">5%</SelectItem>
-                      <SelectItem value="12" label="12%">12%</SelectItem>
-                      <SelectItem value="18" label="18%">18%</SelectItem>
-                      <SelectItem value="28" label="28%">28%</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Name *</Label>
-                <Input
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="JBL Synthesis SCL-3"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Category *</Label>
-                <Select
-                  value={form.categoryId}
-                  onValueChange={(v: string | null) => {
-                    setForm({ ...form, categoryId: v || "" });
-                    setShowNewCategory(v === "__new__");
-                  }}
-                >
-                  <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                  <SelectContent>
-                    {categories.map((c) => (
-                      <SelectItem key={c.id} value={c.id} label={c.name}>{c.name}</SelectItem>
-                    ))}
-                    <SelectItem value="__new__" label="+ New Category">+ New Category</SelectItem>
-                  </SelectContent>
-                </Select>
-                {showNewCategory && (
-                  <Input
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    placeholder="New category name"
-                    className="mt-2"
-                  />
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Textarea
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  placeholder="Describe this product or service..."
-                  rows={2}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Supplier</Label>
-                  <Input
-                    value={form.supplier}
-                    onChange={(e) => setForm({ ...form, supplier: e.target.value })}
-                    placeholder="Harman International"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Stock</Label>
-                  <Input
-                    type="number"
-                    value={form.stock}
-                    onChange={(e) => setForm({ ...form, stock: e.target.value })}
-                    placeholder="Optional"
-                  />
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label>Profit Margin %</Label>
+                    <Input
+                      type="number"
+                      value={form.profitMargin}
+                      onChange={(e) => setForm({ ...form, profitMargin: e.target.value })}
+                      placeholder="5"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>GST Rate (%)</Label>
+                    <Select
+                      value={form.gstRate}
+                      onValueChange={(v: string | null) => setForm({ ...form, gstRate: v || "18" })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0" label="0%">0%</SelectItem>
+                        <SelectItem value="5" label="5%">5%</SelectItem>
+                        <SelectItem value="12" label="12%">12%</SelectItem>
+                        <SelectItem value="18" label="18%">18%</SelectItem>
+                        <SelectItem value="28" label="28%">28%</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tax Type</Label>
+                    <Select
+                      value={form.taxType}
+                      onValueChange={(v: string | null) => setForm({ ...form, taxType: v || "exclusive" })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="exclusive" label="Exclusive">Exclusive</SelectItem>
+                        <SelectItem value="inclusive" label="Inclusive">Inclusive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>HSN Code</Label>
+                    <Input
+                      value={form.hsnCode}
+                      onChange={(e) => setForm({ ...form, hsnCode: e.target.value })}
+                      placeholder="e.g. 85184000"
+                    />
+                  </div>
                 </div>
               </div>
+
+              {/* Inventory */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Inventory</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Manage Stock</Label>
+                    <Select
+                      value={form.manageStock ? "yes" : "no"}
+                      onValueChange={(v: string | null) => setForm({ ...form, manageStock: v === "yes" })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="no" label="No">No</SelectItem>
+                        <SelectItem value="yes" label="Yes">Yes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {form.manageStock && (
+                    <div className="space-y-2">
+                      <Label>Alert Quantity</Label>
+                      <Input
+                        type="number"
+                        value={form.alertQuantity}
+                        onChange={(e) => setForm({ ...form, alertQuantity: e.target.value })}
+                        placeholder="0"
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label>Current Stock</Label>
+                    <Input
+                      type="number"
+                      value={form.stock}
+                      onChange={(e) => setForm({ ...form, stock: e.target.value })}
+                      placeholder="Optional"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Other */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Other</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Supplier</Label>
+                    <Input
+                      value={form.supplier}
+                      onChange={(e) => setForm({ ...form, supplier: e.target.value })}
+                      placeholder="Supplier name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Image URL</Label>
+                    <Input
+                      value={form.imageUrl}
+                      onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+                      placeholder="https://..."
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
                 <Button onClick={handleSave} disabled={saving}>
@@ -323,6 +559,7 @@ export default function ItemsPage() {
         </Dialog>
       </div>
 
+      {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -333,7 +570,11 @@ export default function ItemsPage() {
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />
         </div>
-        <Select value={selectedCategory} onValueChange={(v: string | null) => { setSelectedCategory(v || "all"); setPage(1); }}>
+        <Select value={selectedCategory} onValueChange={(v: string | null) => {
+          setSelectedCategory(v || "all");
+          setSelectedSubCategory("all");
+          setPage(1);
+        }}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="All Categories" />
           </SelectTrigger>
@@ -346,8 +587,41 @@ export default function ItemsPage() {
             ))}
           </SelectContent>
         </Select>
+        {selectedCategory !== "all" && filterSubCategories.length > 0 && (
+          <Select value={selectedSubCategory} onValueChange={(v: string | null) => {
+            setSelectedSubCategory(v || "all");
+            setPage(1);
+          }}>
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="All Sub-Categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" label="All Sub-Categories">All Sub-Categories</SelectItem>
+              {filterSubCategories.map((s) => (
+                <SelectItem key={s.id} value={s.id} label={s.name}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {brands.length > 0 && (
+          <Select value={selectedBrand} onValueChange={(v: string | null) => {
+            setSelectedBrand(v || "all");
+            setPage(1);
+          }}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="All Brands" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" label="All Brands">All Brands</SelectItem>
+              {brands.sort().map((b) => (
+                <SelectItem key={b} value={b} label={b}>{b}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
+      {/* Items List */}
       {loading ? (
         <div className="flex items-center justify-center h-32">
           <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -378,15 +652,21 @@ export default function ItemsPage() {
                         <Badge variant="outline" className="text-[10px] shrink-0">
                           {item.code}
                         </Badge>
+                        {item.brand && (
+                          <span className="text-xs text-muted-foreground shrink-0">{item.brand}</span>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 mt-1 flex-wrap">
                         <Badge variant="secondary" className="text-[10px]">
                           {item.category.name}
                         </Badge>
-                        {item.hsnCode && (
-                          <span className="text-xs text-muted-foreground">HSN: {item.hsnCode}</span>
+                        {item.subCategory && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {item.subCategory.name}
+                          </Badge>
                         )}
                         <span className="text-xs text-muted-foreground">GST: {item.gstRate}%</span>
+                        <span className="text-xs text-muted-foreground">{item.unit}</span>
                         {item.supplier && (
                           <span className="text-xs text-muted-foreground">{item.supplier}</span>
                         )}
@@ -397,9 +677,16 @@ export default function ItemsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    <p className="text-lg font-semibold text-primary whitespace-nowrap">
-                      {formatINR(item.unitPrice)}
-                    </p>
+                    <div className="text-right">
+                      <p className="text-lg font-semibold text-primary whitespace-nowrap">
+                        {formatINR(item.unitPrice)}
+                      </p>
+                      {item.purchasePrice != null && item.purchasePrice > 0 && (
+                        <p className="text-xs text-muted-foreground whitespace-nowrap">
+                          Cost: {formatINR(item.purchasePrice)}
+                        </p>
+                      )}
+                    </div>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(item)}>
                         <Edit2 className="w-4 h-4" />

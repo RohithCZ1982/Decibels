@@ -74,6 +74,7 @@ interface QuotationDetail {
     name: string;
     hsnCode: string | null;
     quantity: number;
+    unit: string;
     unitPrice: number;
     gstRate: number;
     total: number;
@@ -178,6 +179,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
         name: item.name,
         hsnCode: item.hsnCode || "",
         quantity: item.quantity,
+        unit: item.unit || "No",
         unitPrice: item.unitPrice,
         gstRate: item.gstRate,
         itemId: item.item ? undefined as unknown as string : null,
@@ -210,6 +212,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
           name: li.name,
           hsnCode: li.hsnCode || null,
           quantity: li.quantity,
+          unit: li.unit || "No",
           unitPrice: li.unitPrice,
           gstRate: li.gstRate,
           itemId: li.itemId,
