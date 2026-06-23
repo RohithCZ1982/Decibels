@@ -88,13 +88,13 @@ export default function QuotationsPage() {
             <SelectValue placeholder="All Statuses" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="DRAFT">Draft</SelectItem>
-            <SelectItem value="SENT">Sent</SelectItem>
-            <SelectItem value="APPROVED">Approved</SelectItem>
-            <SelectItem value="IN_PRODUCTION">In Production</SelectItem>
-            <SelectItem value="COMPLETED">Completed</SelectItem>
-            <SelectItem value="CLOSED">Closed</SelectItem>
+            <SelectItem value="all" label="All Statuses">All Statuses</SelectItem>
+            <SelectItem value="DRAFT" label="Draft">Draft</SelectItem>
+            <SelectItem value="SENT" label="Sent">Sent</SelectItem>
+            <SelectItem value="APPROVED" label="Approved">Approved</SelectItem>
+            <SelectItem value="IN_PRODUCTION" label="In Production">In Production</SelectItem>
+            <SelectItem value="COMPLETED" label="Completed">Completed</SelectItem>
+            <SelectItem value="CLOSED" label="Closed">Closed</SelectItem>
           </SelectContent>
         </Select>
       </div>

@@ -27,13 +27,7 @@ export async function withAuth(
   }
 }
 
-export function generateQuotationNumber(): string {
-  const now = new Date();
-  const year = now.getFullYear().toString().slice(-2);
-  const month = (now.getMonth() + 1).toString().padStart(2, "0");
-  const random = Math.floor(Math.random() * 10000).toString().padStart(4, "0");
-  return `DEC-${year}${month}-${random}`;
-}
+export { generateQuotationNumber } from "./quotation-calc";
 
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-IN", {

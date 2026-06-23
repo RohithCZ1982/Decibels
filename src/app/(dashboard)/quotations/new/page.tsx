@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -14,18 +15,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Search, ArrowLeft, Save, ChevronUp, ChevronDown } from "lucide-react";
+import { Search, ArrowLeft, Save } from "lucide-react";
 import { toast } from "sonner";
-
-interface Item {
-  id: string;
-  code: string;
-  name: string;
-  hsnCode: string | null;
-  gstRate: number;
-  unitPrice: number;
-  category: { name: string };
-}
+import { LineItemEditor, emptyLineItem, nextLineItemKey, type LineItem, type CatalogItem } from "@/components/line-item-editor";
+import { calculateQuotationTotals, generateQuotationNumber } from "@/lib/quotation-calc";
 
 interface Customer {
   id: string;
@@ -37,48 +30,32 @@ interface Customer {
 interface Template {
   id: string;
   name: string;
-  items: { quantity: number; item: Item }[];
-}
-
-interface LineItem {
-  key: string;
-  name: string;
-  hsnCode: string;
-  quantity: number;
-  unitPrice: number;
-  gstRate: number;
-  itemId: string | null;
-  notes: string;
+  items: { quantity: number; item: CatalogItem }[];
 }
 
 function formatINR(n: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
 }
 
-let keyCounter = 0;
-function nextKey() {
-  return `li-${++keyCounter}`;
-}
-
-function emptyLineItem(): LineItem {
-  return { key: nextKey(), name: "", hsnCode: "", quantity: 1, unitPrice: 0, gstRate: 18, itemId: null, notes: "" };
-}
-
 export default function NewQuotationPage() {
   const router = useRouter();
-  const [allItems, setAllItems] = useState<Item[]>([]);
+  const [allItems, setAllItems] = useState<CatalogItem[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const [quotationNumber, setQuotationNumber] = useState("");
   const [quotationTitle, setQuotationTitle] = useState("");
+  const [billDate, setBillDate] = useState(new Date().toISOString().split("T")[0]);
   const [customerId, setCustomerId] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [lineItems, setLineItems] = useState<LineItem[]>([emptyLineItem()]);
   const [discount, setDiscount] = useState("0");
+  const [includeGst, setIncludeGst] = useState(true);
+  const [enableRoundOff, setEnableRoundOff] = useState(false);
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("1. Prices are valid for 30 days from the date of quotation.\n2. 50% advance payment required to confirm the order.\n3. Balance payment due before installation.\n4. Installation timeline: 4-6 weeks from order confirmation.\n5. 1-year warranty on all equipment and installation.");
 
@@ -86,9 +63,6 @@ export default function NewQuotationPage() {
   const [newCustName, setNewCustName] = useState("");
   const [newCustMobile, setNewCustMobile] = useState("");
   const [newCustEmail, setNewCustEmail] = useState("");
-
-  const [activeAutocomplete, setActiveAutocomplete] = useState<number | null>(null);
-  const [itemSearchValues, setItemSearchValues] = useState<Record<number, string>>({});
 
   const loadData = useCallback(async () => {
     const [iRes, tRes, cRes] = await Promise.all([
@@ -103,11 +77,14 @@ export default function NewQuotationPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+    setQuotationNumber(generateQuotationNumber());
+  }, [loadData]);
 
   const handleTemplateChange = (templateId: string) => {
     setSelectedTemplate(templateId);
-    if (templateId === "none") {
+    if (!templateId) {
       setLineItems([emptyLineItem()]);
       return;
     }
@@ -115,7 +92,7 @@ export default function NewQuotationPage() {
     if (template) {
       setLineItems(
         template.items.map((ti) => ({
-          key: nextKey(),
+          key: nextLineItemKey(),
           name: ti.item.name,
           hsnCode: ti.item.hsnCode || "",
           quantity: ti.quantity,
@@ -128,75 +105,16 @@ export default function NewQuotationPage() {
     }
   };
 
-  const addLineItem = () => {
-    setLineItems([...lineItems, emptyLineItem()]);
-  };
-
-  const removeLineItem = (idx: number) => {
-    if (lineItems.length <= 1) return;
-    setLineItems(lineItems.filter((_, i) => i !== idx));
-  };
-
-  const moveLineItem = (idx: number, direction: "up" | "down") => {
-    const target = direction === "up" ? idx - 1 : idx + 1;
-    if (target < 0 || target >= lineItems.length) return;
-    const updated = [...lineItems];
-    [updated[idx], updated[target]] = [updated[target], updated[idx]];
-    setLineItems(updated);
-  };
-
-  const updateLineItem = (idx: number, field: keyof LineItem, value: string | number | null) => {
-    const updated = [...lineItems];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (updated[idx] as any)[field] = value;
-    setLineItems(updated);
-  };
-
-  const selectItemForLine = (idx: number, item: Item) => {
-    const updated = [...lineItems];
-    updated[idx] = {
-      ...updated[idx],
-      name: item.name,
-      hsnCode: item.hsnCode || "",
-      unitPrice: item.unitPrice,
-      gstRate: item.gstRate,
-      itemId: item.id,
-    };
-    setLineItems(updated);
-    setActiveAutocomplete(null);
-    setItemSearchValues({});
-  };
-
-  const getFilteredItems = (searchVal: string) => {
-    if (searchVal.length < 3) return [];
-    const lower = searchVal.toLowerCase();
-    return allItems.filter(
-      (item) => item.name.toLowerCase().includes(lower) || item.code.toLowerCase().includes(lower)
-    ).slice(0, 8);
-  };
-
-  const subtotal = lineItems.reduce((sum, li) => sum + li.quantity * li.unitPrice, 0);
   const disc = parseFloat(discount) || 0;
-
-  // Compute GST breakdown by rate
-  const gstBreakdown: { rate: number; taxable: number; gst: number }[] = [];
-  const rateMap = new Map<number, number>();
-  for (const li of lineItems) {
-    if (li.unitPrice <= 0) continue;
-    const lineTotal = li.quantity * li.unitPrice;
-    rateMap.set(li.gstRate, (rateMap.get(li.gstRate) || 0) + lineTotal);
-  }
-  const discountRatio = subtotal > 0 ? (subtotal - disc) / subtotal : 1;
-  for (const [rate, total] of rateMap) {
-    const taxable = total * discountRatio;
-    gstBreakdown.push({ rate, taxable, gst: (taxable * rate) / 100 });
-  }
-  gstBreakdown.sort((a, b) => a.rate - b.rate);
-  const totalGst = gstBreakdown.reduce((s, g) => s + g.gst, 0);
-  const grandTotal = subtotal - disc + totalGst;
+  const validItems = lineItems.filter((li) => li.name && li.unitPrice > 0);
+  const calc = calculateQuotationTotals({
+    items: validItems,
+    discount: disc,
+    includeGst,
+    roundOff: enableRoundOff,
+  });
 
   const handleSubmit = async () => {
-    const validItems = lineItems.filter((li) => li.name && li.unitPrice > 0);
     if (validItems.length === 0) {
       toast.error("Add at least one item");
       return;
@@ -238,6 +156,10 @@ export default function NewQuotationPage() {
         customerId: custId,
         templateId: selectedTemplate && selectedTemplate !== "none" ? selectedTemplate : null,
         title: quotationTitle || null,
+        quotationNumber: quotationNumber.trim() || null,
+        billDate,
+        includeGst,
+        enableRoundOff,
         items: validItems.map((li) => ({
           name: li.name,
           hsnCode: li.hsnCode || null,
@@ -247,7 +169,6 @@ export default function NewQuotationPage() {
           itemId: li.itemId,
           notes: li.notes,
         })),
-        gstPercent: 0,
         discount: disc,
         notes,
         terms,
@@ -293,15 +214,37 @@ export default function NewQuotationPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Quotation Name</CardTitle>
+          <CardTitle className="text-base">Quotation Details</CardTitle>
         </CardHeader>
-        <CardContent>
-          <Input
-            value={quotationTitle}
-            onChange={(e) => setQuotationTitle(e.target.value)}
-            placeholder="e.g. 7.1.2 Baffle Screen Home Theater Platinum"
-          />
-          <p className="text-xs text-muted-foreground mt-1.5">This name appears on the PDF title bar</p>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Quotation Number</Label>
+              <Input
+                value={quotationNumber}
+                onChange={(e) => setQuotationNumber(e.target.value)}
+                placeholder="Auto-generated"
+              />
+              <p className="text-xs text-muted-foreground">Auto-generated. Override only if needed.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Quotation Name</Label>
+              <Input
+                value={quotationTitle}
+                onChange={(e) => setQuotationTitle(e.target.value)}
+                placeholder="e.g. 7.1.2 Baffle Screen Home Theater Platinum"
+              />
+              <p className="text-xs text-muted-foreground">Appears on the PDF title bar</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Bill Date</Label>
+              <Input
+                type="date"
+                value={billDate}
+                onChange={(e) => setBillDate(e.target.value)}
+              />
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -372,10 +315,9 @@ export default function NewQuotationPage() {
             <CardTitle className="text-base">Template</CardTitle>
           </CardHeader>
           <CardContent>
-            <Select value={selectedTemplate} onValueChange={(v: string | null) => handleTemplateChange(v || "none")}>
-              <SelectTrigger><SelectValue placeholder="Select template (optional)" /></SelectTrigger>
+            <Select value={selectedTemplate} defaultValue="" onValueChange={(v: string | null) => handleTemplateChange(v || "")}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Select template (optional)" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none" label="No template">No template</SelectItem>
                 {templates.map((t) => (
                   <SelectItem key={t.id} value={t.id} label={t.name}>{t.name}</SelectItem>
                 ))}
@@ -386,123 +328,8 @@ export default function NewQuotationPage() {
       </div>
 
       <Card className="overflow-visible">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Line Items</CardTitle>
-          <Button variant="outline" size="sm" onClick={addLineItem}>
-            <Plus className="w-4 h-4 mr-1" /> Add Item
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <div className="grid grid-cols-[1fr_70px_110px_70px_110px_36px_40px] gap-2 text-xs font-medium text-muted-foreground px-1">
-              <span>Item Name</span>
-              <span>Qty</span>
-              <span>Unit Price</span>
-              <span>GST %</span>
-              <span>Total</span>
-              <span></span>
-              <span></span>
-            </div>
-            {lineItems.map((li, idx) => (
-              <div key={li.key} className="space-y-1">
-                <div className="grid grid-cols-[1fr_70px_110px_70px_110px_36px_40px] gap-2 items-start">
-                  <div className="relative">
-                    <Input
-                      placeholder="Type 3+ chars to search..."
-                      value={activeAutocomplete === idx ? (itemSearchValues[idx] ?? li.name) : li.name}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setItemSearchValues({ ...itemSearchValues, [idx]: val });
-                        setActiveAutocomplete(idx);
-                        updateLineItem(idx, "name", val);
-                        updateLineItem(idx, "itemId", null);
-                        updateLineItem(idx, "hsnCode", "");
-                      }}
-                      onFocus={() => setActiveAutocomplete(idx)}
-                      onBlur={() => setTimeout(() => setActiveAutocomplete(null), 200)}
-                    />
-                    {activeAutocomplete === idx && getFilteredItems(itemSearchValues[idx] ?? li.name).length > 0 && (
-                      <div className="absolute z-50 w-full mt-1 border rounded-lg bg-popover shadow-xl max-h-60 overflow-y-auto">
-                        {getFilteredItems(itemSearchValues[idx] ?? li.name).map((item) => (
-                          <button
-                            key={item.id}
-                            className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent border-b border-border/30 last:border-0"
-                            onMouseDown={(e) => { e.preventDefault(); selectItemForLine(idx, item); }}
-                          >
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <span className="font-medium">{item.name}</span>
-                                <span className="text-muted-foreground ml-1.5">({item.code})</span>
-                              </div>
-                              <span className="text-primary font-medium ml-2 shrink-0">{formatINR(item.unitPrice)}</span>
-                            </div>
-                            <div className="flex gap-3 mt-0.5 text-xs text-muted-foreground">
-                              {item.hsnCode && <span>HSN: {item.hsnCode}</span>}
-                              <span>GST: {item.gstRate}%</span>
-                              <span>{item.category.name}</span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={li.quantity}
-                    onChange={(e) => updateLineItem(idx, "quantity", parseInt(e.target.value) || 1)}
-                    className="text-center"
-                  />
-                  <Input
-                    type="number"
-                    value={li.unitPrice}
-                    onChange={(e) => updateLineItem(idx, "unitPrice", parseFloat(e.target.value) || 0)}
-                  />
-                  <Input
-                    type="number"
-                    value={li.gstRate}
-                    onChange={(e) => updateLineItem(idx, "gstRate", parseFloat(e.target.value) || 0)}
-                    className="text-center"
-                  />
-                  <div className="h-9 flex items-center px-3 bg-muted/50 rounded-md text-sm font-medium">
-                    {formatINR(li.quantity * li.unitPrice)}
-                  </div>
-                  <div className="flex flex-col">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-[18px] w-9 hover:text-primary"
-                      onClick={() => moveLineItem(idx, "up")}
-                      disabled={idx === 0}
-                    >
-                      <ChevronUp className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-[18px] w-9 hover:text-primary"
-                      onClick={() => moveLineItem(idx, "down")}
-                      disabled={idx === lineItems.length - 1}
-                    >
-                      <ChevronDown className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9 hover:text-destructive"
-                    onClick={() => removeLineItem(idx)}
-                    disabled={lineItems.length <= 1}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-                {li.hsnCode && (
-                  <p className="text-[10px] text-muted-foreground pl-1">HSN: {li.hsnCode}</p>
-                )}
-              </div>
-            ))}
-          </div>
+        <CardContent className="pt-6">
+          <LineItemEditor lineItems={lineItems} setLineItems={setLineItems} allItems={allItems} />
         </CardContent>
       </Card>
 
@@ -530,8 +357,27 @@ export default function NewQuotationPage() {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
-              <span className="font-medium">{formatINR(subtotal)}</span>
+              <span className="font-medium">{formatINR(calc.subtotal)}</span>
             </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="include-gst" className="text-sm text-muted-foreground cursor-pointer">Include GST</Label>
+              <Switch id="include-gst" checked={includeGst} onCheckedChange={setIncludeGst} />
+            </div>
+            {includeGst && calc.gstBreakdown.map((g) => (
+              <div key={g.rate} className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">GST @{g.rate}%</span>
+                <span>{formatINR(g.gst)}</span>
+              </div>
+            ))}
+            {includeGst && calc.gstBreakdown.length > 1 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Total GST</span>
+                <span className="font-medium">{formatINR(calc.gstAmount)}</span>
+              </div>
+            )}
+            {!includeGst && (
+              <div className="text-sm text-muted-foreground">GST: Not Applicable</div>
+            )}
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground flex-1">Discount</span>
               <Input
@@ -541,21 +387,19 @@ export default function NewQuotationPage() {
                 onChange={(e) => setDiscount(e.target.value)}
               />
             </div>
-            {gstBreakdown.map((g) => (
-              <div key={g.rate} className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">GST @{g.rate}%</span>
-                <span>{formatINR(g.gst)}</span>
-              </div>
-            ))}
-            {gstBreakdown.length > 1 && (
+            <div className="flex items-center justify-between">
+              <Label htmlFor="round-off" className="text-sm text-muted-foreground cursor-pointer">Round to nearest ₹100</Label>
+              <Switch id="round-off" checked={enableRoundOff} onCheckedChange={setEnableRoundOff} />
+            </div>
+            {enableRoundOff && calc.roundOff !== 0 && (
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Total GST</span>
-                <span className="font-medium">{formatINR(totalGst)}</span>
+                <span className="text-muted-foreground">Round Off</span>
+                <span>{calc.roundOff > 0 ? "+" : ""}{formatINR(calc.roundOff)}</span>
               </div>
             )}
             <div className="border-t pt-3 flex items-center justify-between">
               <span className="font-semibold text-lg">Grand Total</span>
-              <span className="font-bold text-2xl text-primary">{formatINR(grandTotal)}</span>
+              <span className="font-bold text-2xl text-primary">{formatINR(calc.grandTotal)}</span>
             </div>
             <Button className="w-full mt-4" size="lg" onClick={handleSubmit} disabled={saving}>
               <Save className="w-4 h-4 mr-2" />

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -34,11 +35,18 @@ import {
   Download,
   MessageSquare,
   Clock,
-  ArrowRight,
   User,
+  Pencil,
+  X,
+  Save,
+  Trash2,
+  Printer,
+  Edit2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { generateQuotationPDF } from "@/lib/pdf-generator";
+import { LineItemEditor, nextLineItemKey, emptyLineItem, type LineItem, type CatalogItem } from "@/components/line-item-editor";
+import { calculateQuotationTotals, EDITABLE_STATUSES, INVOICE_STATUSES } from "@/lib/quotation-calc";
 
 interface QuotationDetail {
   id: string;
@@ -50,10 +58,13 @@ interface QuotationDetail {
   gstAmount: number;
   discount: number;
   grandTotal: number;
+  roundOff: number;
+  includeGst: boolean;
   notes: string | null;
   terms: string | null;
   validUntil: string | null;
   completionDate: string | null;
+  billDate: string | null;
   createdAt: string;
   customer: { id: string; name: string; mobile: string; email: string | null; address: string | null };
   template: { name: string } | null;
@@ -131,6 +142,19 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
   const [payForm, setPayForm] = useState({ amount: "", date: new Date().toISOString().split("T")[0], mode: "BANK_TRANSFER", transactionId: "", notes: "" });
   const [noteContent, setNoteContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<string | null>(null);
+  const [editPayForm, setEditPayForm] = useState({ amount: "", date: "", mode: "BANK_TRANSFER", transactionId: "", notes: "" });
+  const [editingNote, setEditingNote] = useState<string | null>(null);
+  const [editNoteContent, setEditNoteContent] = useState("");
+
+  // Edit mode state
+  const [editing, setEditing] = useState(false);
+  const [editItems, setEditItems] = useState<LineItem[]>([]);
+  const [editDiscount, setEditDiscount] = useState("0");
+  const [editIncludeGst, setEditIncludeGst] = useState(true);
+  const [editEnableRoundOff, setEditEnableRoundOff] = useState(false);
+  const [editBillDate, setEditBillDate] = useState("");
+  const [allCatalogItems, setAllCatalogItems] = useState<CatalogItem[]>([]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/quotations/${id}`);
@@ -141,6 +165,74 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  const startEditing = async () => {
+    if (!quotation) return;
+    if (allCatalogItems.length === 0) {
+      const res = await fetch("/api/items?all=true");
+      if (res.ok) setAllCatalogItems(await res.json());
+    }
+    setEditItems(
+      quotation.items.map((item) => ({
+        key: nextLineItemKey(),
+        name: item.name,
+        hsnCode: item.hsnCode || "",
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        gstRate: item.gstRate,
+        itemId: item.item ? undefined as unknown as string : null,
+        notes: item.notes || "",
+      }))
+    );
+    setEditDiscount(quotation.discount.toString());
+    setEditIncludeGst(quotation.includeGst);
+    setEditEnableRoundOff(quotation.roundOff !== 0);
+    setEditBillDate(quotation.billDate ? new Date(quotation.billDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
+    setEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setEditing(false);
+  };
+
+  const saveEdits = async () => {
+    const validItems = editItems.filter((li) => li.name && li.unitPrice > 0);
+    if (validItems.length === 0) {
+      toast.error("At least one valid item is required");
+      return;
+    }
+    setSaving(true);
+    const res = await fetch(`/api/quotations/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: validItems.map((li) => ({
+          name: li.name,
+          hsnCode: li.hsnCode || null,
+          quantity: li.quantity,
+          unitPrice: li.unitPrice,
+          gstRate: li.gstRate,
+          itemId: li.itemId,
+          notes: li.notes,
+        })),
+        discount: parseFloat(editDiscount) || 0,
+        includeGst: editIncludeGst,
+        enableRoundOff: editEnableRoundOff,
+        billDate: editBillDate,
+        notes: quotation?.notes,
+        terms: quotation?.terms,
+      }),
+    });
+    if (res.ok) {
+      toast.success("Quotation updated");
+      setEditing(false);
+      load();
+    } else {
+      const d = await res.json();
+      toast.error(d.error || "Failed to update");
+    }
+    setSaving(false);
+  };
 
   const updateStatus = async (newStatus: string) => {
     setSaving(true);
@@ -182,6 +274,52 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
     setSaving(false);
   };
 
+  const startEditPayment = (p: QuotationDetail["payments"][0]) => {
+    setEditingPayment(p.id);
+    setEditPayForm({
+      amount: p.amount.toString(),
+      date: new Date(p.date).toISOString().split("T")[0],
+      mode: p.mode,
+      transactionId: p.transactionId || "",
+      notes: p.notes || "",
+    });
+    setPaymentOpen(true);
+  };
+
+  const updatePayment = async () => {
+    if (!editingPayment || !editPayForm.amount || !editPayForm.date || !editPayForm.mode) {
+      toast.error("Amount, date, and mode are required");
+      return;
+    }
+    setSaving(true);
+    const res = await fetch(`/api/payments/${editingPayment}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(editPayForm),
+    });
+    if (res.ok) {
+      toast.success("Payment updated");
+      setPaymentOpen(false);
+      setEditingPayment(null);
+      load();
+    } else {
+      const d = await res.json();
+      toast.error(d.error || "Failed to update payment");
+    }
+    setSaving(false);
+  };
+
+  const deletePayment = async (paymentId: string) => {
+    if (!confirm("Delete this payment?")) return;
+    const res = await fetch(`/api/payments/${paymentId}`, { method: "DELETE" });
+    if (res.ok) {
+      toast.success("Payment deleted");
+      load();
+    } else {
+      toast.error("Failed to delete payment");
+    }
+  };
+
   const addNote = async () => {
     if (!noteContent.trim()) return;
     setSaving(true);
@@ -194,9 +332,48 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
       toast.success("Note added");
       setNoteOpen(false);
       setNoteContent("");
+      setEditingNote(null);
       load();
     }
     setSaving(false);
+  };
+
+  const startEditNote = (note: QuotationDetail["projectNotes"][0]) => {
+    setEditingNote(note.id);
+    setEditNoteContent(note.content);
+    setNoteOpen(true);
+  };
+
+  const updateNote = async () => {
+    if (!editingNote || !editNoteContent.trim()) return;
+    setSaving(true);
+    const res = await fetch(`/api/notes/${editingNote}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: editNoteContent }),
+    });
+    if (res.ok) {
+      toast.success("Note updated");
+      setNoteOpen(false);
+      setEditingNote(null);
+      setEditNoteContent("");
+      load();
+    } else {
+      const d = await res.json();
+      toast.error(d.error || "Failed to update note");
+    }
+    setSaving(false);
+  };
+
+  const deleteNote = async (noteId: string) => {
+    if (!confirm("Delete this note?")) return;
+    const res = await fetch(`/api/notes/${noteId}`, { method: "DELETE" });
+    if (res.ok) {
+      toast.success("Note deleted");
+      load();
+    } else {
+      toast.error("Failed to delete note");
+    }
   };
 
   const handleDownloadPDF = async () => {
@@ -218,6 +395,19 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
   const balance = quotation.grandTotal - totalPaid;
   const action = nextAction[quotation.status];
   const currentStatusIdx = statusFlow.findIndex((s) => s.key === quotation.status);
+  const isInvoice = INVOICE_STATUSES.includes(quotation.status);
+  const canEdit = EDITABLE_STATUSES.includes(quotation.status);
+
+  // Edit mode calculations
+  const editDisc = parseFloat(editDiscount) || 0;
+  const editCalc = editing
+    ? calculateQuotationTotals({
+        items: editItems.filter((li) => li.name && li.unitPrice > 0),
+        discount: editDisc,
+        includeGst: editIncludeGst,
+        roundOff: editEnableRoundOff,
+      })
+    : null;
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -232,6 +422,11 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
               <Badge variant="outline" className={`${statusColors[quotation.status]}`}>
                 {quotation.status.replace("_", " ")}
               </Badge>
+              {isInvoice && (
+                <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/20">
+                  Tax Invoice
+                </Badge>
+              )}
             </div>
             {quotation.title && (
               <p className="text-sm font-medium text-primary mt-0.5">{quotation.title}</p>
@@ -242,14 +437,33 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleDownloadPDF}>
-            <Download className="w-4 h-4 mr-2" /> PDF
-          </Button>
-          {action && (
-            <Button onClick={() => updateStatus(action.status)} disabled={saving}>
-              <action.icon className="w-4 h-4 mr-2" />
-              {action.label}
-            </Button>
+          {editing ? (
+            <>
+              <Button variant="outline" onClick={cancelEditing} disabled={saving}>
+                <X className="w-4 h-4 mr-2" /> Cancel
+              </Button>
+              <Button onClick={saveEdits} disabled={saving}>
+                <Save className="w-4 h-4 mr-2" />
+                {saving ? "Saving..." : "Save Changes"}
+              </Button>
+            </>
+          ) : (
+            <>
+              {canEdit && (
+                <Button variant="outline" onClick={startEditing}>
+                  <Pencil className="w-4 h-4 mr-2" /> Edit
+                </Button>
+              )}
+              <Button variant="outline" onClick={handleDownloadPDF}>
+                <Download className="w-4 h-4 mr-2" /> PDF
+              </Button>
+              {action && (
+                <Button onClick={() => updateStatus(action.status)} disabled={saving}>
+                  <action.icon className="w-4 h-4 mr-2" />
+                  {action.label}
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -305,30 +519,71 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
             <CardTitle className="text-base">Financial Summary</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatINR(quotation.subtotal)}</span></div>
-            {quotation.discount > 0 && (
-              <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span>-{formatINR(quotation.discount)}</span></div>
+            {editing && editCalc ? (
+              <>
+                <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatINR(editCalc.subtotal)}</span></div>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="edit-gst" className="text-sm text-muted-foreground cursor-pointer">Include GST</Label>
+                  <Switch id="edit-gst" checked={editIncludeGst} onCheckedChange={setEditIncludeGst} />
+                </div>
+                {editIncludeGst ? (
+                  editCalc.gstBreakdown.map((g) => (
+                    <div key={g.rate} className="flex justify-between"><span className="text-muted-foreground">GST @{g.rate}%</span><span>{formatINR(g.gst)}</span></div>
+                  ))
+                ) : (
+                  <div className="text-muted-foreground">GST: Not Applicable</div>
+                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground flex-1">Discount</span>
+                  <Input type="number" className="w-28 h-7 text-right text-sm" value={editDiscount} onChange={(e) => setEditDiscount(e.target.value)} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="edit-round" className="text-sm text-muted-foreground cursor-pointer">Round to ₹100</Label>
+                  <Switch id="edit-round" checked={editEnableRoundOff} onCheckedChange={setEditEnableRoundOff} />
+                </div>
+                {editEnableRoundOff && editCalc.roundOff !== 0 && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">Round Off</span><span>{editCalc.roundOff > 0 ? "+" : ""}{formatINR(editCalc.roundOff)}</span></div>
+                )}
+                <Separator />
+                <div className="flex justify-between font-bold text-base"><span>Grand Total</span><span className="text-primary">{formatINR(editCalc.grandTotal)}</span></div>
+                <div className="space-y-2 pt-2">
+                  <Label className="text-muted-foreground">Bill Date</Label>
+                  <Input type="date" className="h-8" value={editBillDate} onChange={(e) => setEditBillDate(e.target.value)} />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatINR(quotation.subtotal)}</span></div>
+                {quotation.includeGst ? (
+                  (() => {
+                    const gstMap = new Map<number, number>();
+                    for (const it of quotation.items) {
+                      gstMap.set(it.gstRate, (gstMap.get(it.gstRate) || 0) + (it.total * it.gstRate) / 100);
+                    }
+                    const entries = Array.from(gstMap.entries()).sort((a, b) => a[0] - b[0]);
+                    return entries.map(([rate, amt]) => (
+                      <div key={rate} className="flex justify-between"><span className="text-muted-foreground">GST @{rate}%</span><span>{formatINR(amt)}</span></div>
+                    ));
+                  })()
+                ) : (
+                  <div className="text-muted-foreground text-sm">GST: Not Applicable</div>
+                )}
+                {quotation.discount > 0 && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span>-{formatINR(quotation.discount)}</span></div>
+                )}
+                {quotation.roundOff !== 0 && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">Round Off</span><span>{quotation.roundOff > 0 ? "+" : ""}{formatINR(quotation.roundOff)}</span></div>
+                )}
+                <Separator />
+                <div className="flex justify-between font-bold text-base"><span>Grand Total</span><span className="text-primary">{formatINR(quotation.grandTotal)}</span></div>
+                <Separator />
+                <div className="flex justify-between"><span className="text-muted-foreground">Paid</span><span className="text-emerald-400">{formatINR(totalPaid)}</span></div>
+                <div className="flex justify-between font-medium">
+                  <span>Balance</span>
+                  <span className={balance > 0 ? "text-amber-400" : "text-emerald-400"}>{formatINR(balance)}</span>
+                </div>
+              </>
             )}
-            {(() => {
-              const gstMap = new Map<number, number>();
-              const discRatio = quotation.subtotal > 0 ? (quotation.subtotal - quotation.discount) / quotation.subtotal : 1;
-              for (const it of quotation.items) {
-                const taxable = it.total * discRatio;
-                gstMap.set(it.gstRate, (gstMap.get(it.gstRate) || 0) + (taxable * it.gstRate) / 100);
-              }
-              const entries = Array.from(gstMap.entries()).sort((a, b) => a[0] - b[0]);
-              return entries.map(([rate, amt]) => (
-                <div key={rate} className="flex justify-between"><span className="text-muted-foreground">GST @{rate}%</span><span>{formatINR(amt)}</span></div>
-              ));
-            })()}
-            <Separator />
-            <div className="flex justify-between font-bold text-base"><span>Grand Total</span><span className="text-primary">{formatINR(quotation.grandTotal)}</span></div>
-            <Separator />
-            <div className="flex justify-between"><span className="text-muted-foreground">Paid</span><span className="text-emerald-400">{formatINR(totalPaid)}</span></div>
-            <div className="flex justify-between font-medium">
-              <span>Balance</span>
-              <span className={balance > 0 ? "text-amber-400" : "text-emerald-400"}>{formatINR(balance)}</span>
-            </div>
           </CardContent>
         </Card>
 
@@ -341,6 +596,9 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
             {quotation.template && (
               <div className="flex justify-between"><span className="text-muted-foreground">Template</span><span>{quotation.template.name}</span></div>
             )}
+            {quotation.billDate && (
+              <div className="flex justify-between"><span className="text-muted-foreground">Bill Date</span><span>{formatDate(quotation.billDate)}</span></div>
+            )}
             {quotation.validUntil && (
               <div className="flex justify-between"><span className="text-muted-foreground">Valid Until</span><span>{formatDate(quotation.validUntil)}</span></div>
             )}
@@ -349,52 +607,63 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
             )}
             <div className="flex justify-between"><span className="text-muted-foreground">Items</span><span>{quotation.items.length}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Payments</span><span>{quotation.payments.length}</span></div>
+            {!quotation.includeGst && (
+              <div className="flex justify-between"><span className="text-muted-foreground">GST</span><span>Not Applicable</span></div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Items Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Line Items</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-muted-foreground">
-                  <th className="text-left py-2 pr-4">#</th>
-                  <th className="text-left py-2 pr-4">Item</th>
-                  <th className="text-left py-2 pr-4">HSN</th>
-                  <th className="text-right py-2 pr-4">Qty</th>
-                  <th className="text-right py-2 pr-4">Unit Price</th>
-                  <th className="text-right py-2 pr-4">GST</th>
-                  <th className="text-right py-2">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {quotation.items.map((item, idx) => (
-                  <tr key={item.id} className="border-b border-border/50">
-                    <td className="py-2.5 pr-4 text-muted-foreground">{idx + 1}</td>
-                    <td className="py-2.5 pr-4">
-                      <p className="font-medium">{item.name}</p>
-                      {item.item && (
-                        <p className="text-xs text-muted-foreground">{item.item.code} &bull; {item.item.category?.name}</p>
-                      )}
-                      {item.notes && <p className="text-xs text-muted-foreground mt-0.5">{item.notes}</p>}
-                    </td>
-                    <td className="py-2.5 pr-4 text-xs text-muted-foreground">{item.hsnCode || "—"}</td>
-                    <td className="py-2.5 pr-4 text-right">{item.quantity}</td>
-                    <td className="py-2.5 pr-4 text-right">{formatINR(item.unitPrice)}</td>
-                    <td className="py-2.5 pr-4 text-right text-muted-foreground">{item.gstRate}%</td>
-                    <td className="py-2.5 text-right font-medium">{formatINR(item.total)}</td>
+      {/* Items - Edit or Read-only */}
+      {editing ? (
+        <Card className="overflow-visible">
+          <CardContent className="pt-6">
+            <LineItemEditor lineItems={editItems} setLineItems={setEditItems} allItems={allCatalogItems} />
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Line Items</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground">
+                    <th className="text-left py-2 pr-4">#</th>
+                    <th className="text-left py-2 pr-4">Item</th>
+                    <th className="text-left py-2 pr-4">HSN</th>
+                    <th className="text-right py-2 pr-4">Qty</th>
+                    <th className="text-right py-2 pr-4">Unit Price</th>
+                    <th className="text-right py-2 pr-4">GST</th>
+                    <th className="text-right py-2">Total</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                </thead>
+                <tbody>
+                  {quotation.items.map((item, idx) => (
+                    <tr key={item.id} className="border-b border-border/50">
+                      <td className="py-2.5 pr-4 text-muted-foreground">{idx + 1}</td>
+                      <td className="py-2.5 pr-4">
+                        <p className="font-medium">{item.name}</p>
+                        {item.item && (
+                          <p className="text-xs text-muted-foreground">{item.item.code} &bull; {item.item.category?.name}</p>
+                        )}
+                        {item.notes && <p className="text-xs text-muted-foreground mt-0.5">{item.notes}</p>}
+                      </td>
+                      <td className="py-2.5 pr-4 text-xs text-muted-foreground">{item.hsnCode || "—"}</td>
+                      <td className="py-2.5 pr-4 text-right">{item.quantity}</td>
+                      <td className="py-2.5 pr-4 text-right">{formatINR(item.unitPrice)}</td>
+                      <td className="py-2.5 pr-4 text-right text-muted-foreground">{item.gstRate}%</td>
+                      <td className="py-2.5 text-right font-medium">{formatINR(item.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         {/* Payments */}
@@ -403,51 +672,57 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
             <CardTitle className="text-base flex items-center gap-2">
               <CreditCard className="w-4 h-4" /> Payments
             </CardTitle>
-            <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
-              <DialogTrigger>
-                <Button variant="outline" size="sm">Record Payment</Button>
+            <Dialog open={paymentOpen} onOpenChange={(open) => {
+              setPaymentOpen(open);
+              if (!open) { setEditingPayment(null); }
+            }}>
+              <DialogTrigger render={<Button variant="outline" size="sm" onClick={() => {
+                setEditingPayment(null);
+                setPayForm({ amount: "", date: new Date().toISOString().split("T")[0], mode: "BANK_TRANSFER", transactionId: "", notes: "" });
+              }} />}>
+                Record Payment
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Record Payment</DialogTitle>
+                  <DialogTitle>{editingPayment ? "Edit Payment" : "Record Payment"}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 mt-2">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Amount (INR) *</Label>
-                      <Input type="number" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} placeholder={balance.toString()} />
+                      <Input type="number" value={editingPayment ? editPayForm.amount : payForm.amount} onChange={(e) => editingPayment ? setEditPayForm({ ...editPayForm, amount: e.target.value }) : setPayForm({ ...payForm, amount: e.target.value })} placeholder={balance.toString()} />
                     </div>
                     <div className="space-y-2">
                       <Label>Date *</Label>
-                      <Input type="date" value={payForm.date} onChange={(e) => setPayForm({ ...payForm, date: e.target.value })} />
+                      <Input type="date" value={editingPayment ? editPayForm.date : payForm.date} onChange={(e) => editingPayment ? setEditPayForm({ ...editPayForm, date: e.target.value }) : setPayForm({ ...payForm, date: e.target.value })} />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Payment Mode *</Label>
-                    <Select value={payForm.mode} onValueChange={(v: string | null) => setPayForm({ ...payForm, mode: v || "BANK_TRANSFER" })}>
+                    <Select value={editingPayment ? editPayForm.mode : payForm.mode} onValueChange={(v: string | null) => editingPayment ? setEditPayForm({ ...editPayForm, mode: v || "BANK_TRANSFER" }) : setPayForm({ ...payForm, mode: v || "BANK_TRANSFER" })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="CASH">Cash</SelectItem>
-                        <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
-                        <SelectItem value="UPI">UPI</SelectItem>
-                        <SelectItem value="CARD">Card</SelectItem>
-                        <SelectItem value="CHEQUE">Cheque</SelectItem>
-                        <SelectItem value="OTHER">Other</SelectItem>
+                        <SelectItem value="CASH" label="Cash">Cash</SelectItem>
+                        <SelectItem value="BANK_TRANSFER" label="Bank Transfer">Bank Transfer</SelectItem>
+                        <SelectItem value="UPI" label="UPI">UPI</SelectItem>
+                        <SelectItem value="CARD" label="Card">Card</SelectItem>
+                        <SelectItem value="CHEQUE" label="Cheque">Cheque</SelectItem>
+                        <SelectItem value="OTHER" label="Other">Other</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Transaction ID</Label>
-                    <Input value={payForm.transactionId} onChange={(e) => setPayForm({ ...payForm, transactionId: e.target.value })} placeholder="Reference number" />
+                    <Input value={editingPayment ? editPayForm.transactionId : payForm.transactionId} onChange={(e) => editingPayment ? setEditPayForm({ ...editPayForm, transactionId: e.target.value }) : setPayForm({ ...payForm, transactionId: e.target.value })} placeholder="Reference number" />
                   </div>
                   <div className="space-y-2">
                     <Label>Notes</Label>
-                    <Textarea value={payForm.notes} onChange={(e) => setPayForm({ ...payForm, notes: e.target.value })} rows={2} />
+                    <Textarea value={editingPayment ? editPayForm.notes : payForm.notes} onChange={(e) => editingPayment ? setEditPayForm({ ...editPayForm, notes: e.target.value }) : setPayForm({ ...payForm, notes: e.target.value })} rows={2} />
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button>
-                    <Button onClick={addPayment} disabled={saving}>
-                      {saving ? "Recording..." : "Record Payment"}
+                    <Button onClick={editingPayment ? updatePayment : addPayment} disabled={saving}>
+                      {saving ? (editingPayment ? "Updating..." : "Recording...") : (editingPayment ? "Update Payment" : "Record Payment")}
                     </Button>
                   </div>
                 </div>
@@ -460,17 +735,23 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
             ) : (
               <div className="space-y-2">
                 {quotation.payments.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                  <div key={p.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 group">
                     <div>
                       <p className="text-sm font-medium">{formatINR(p.amount)}</p>
                       <p className="text-xs text-muted-foreground">
                         {formatDate(p.date)} &bull; {p.mode.replace("_", " ")} &bull; by {p.recordedBy.name}
                       </p>
                       {p.transactionId && <p className="text-xs text-muted-foreground">Ref: {p.transactionId}</p>}
+                      {p.notes && <p className="text-xs text-muted-foreground mt-0.5">{p.notes}</p>}
                     </div>
-                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
-                      Paid
-                    </Badge>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => startEditPayment(p)}>
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive" onClick={() => deletePayment(p.id)}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -497,20 +778,31 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
             <CardTitle className="text-base flex items-center gap-2">
               <MessageSquare className="w-4 h-4" /> Project Notes
             </CardTitle>
-            <Dialog open={noteOpen} onOpenChange={setNoteOpen}>
-              <DialogTrigger>
-                <Button variant="outline" size="sm">Add Note</Button>
+            <Dialog open={noteOpen} onOpenChange={(open) => {
+              setNoteOpen(open);
+              if (!open) { setEditingNote(null); setEditNoteContent(""); }
+            }}>
+              <DialogTrigger render={<Button variant="outline" size="sm" onClick={() => {
+                setEditingNote(null);
+                setNoteContent("");
+              }} />}>
+                Add Note
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Add Project Note</DialogTitle>
+                  <DialogTitle>{editingNote ? "Edit Note" : "Add Project Note"}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 mt-2">
-                  <Textarea value={noteContent} onChange={(e) => setNoteContent(e.target.value)} placeholder="Add progress update, notes, or observations..." rows={4} />
+                  <Textarea
+                    value={editingNote ? editNoteContent : noteContent}
+                    onChange={(e) => editingNote ? setEditNoteContent(e.target.value) : setNoteContent(e.target.value)}
+                    placeholder="Add progress update, notes, or observations..."
+                    rows={4}
+                  />
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => setNoteOpen(false)}>Cancel</Button>
-                    <Button onClick={addNote} disabled={saving}>
-                      {saving ? "Adding..." : "Add Note"}
+                    <Button onClick={editingNote ? updateNote : addNote} disabled={saving}>
+                      {saving ? (editingNote ? "Updating..." : "Adding...") : (editingNote ? "Update Note" : "Add Note")}
                     </Button>
                   </div>
                 </div>
@@ -523,8 +815,18 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
             ) : (
               <div className="space-y-3">
                 {quotation.projectNotes.map((note) => (
-                  <div key={note.id} className="p-3 rounded-lg bg-muted/30">
-                    <p className="text-sm">{note.content}</p>
+                  <div key={note.id} className="p-3 rounded-lg bg-muted/30 group">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm flex-1">{note.content}</p>
+                      <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEditNote(note)}>
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive" onClick={() => deleteNote(note.id)}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
                     <p className="text-xs text-muted-foreground mt-2">
                       {formatDate(note.createdAt)} by {note.createdBy.name}
                     </p>

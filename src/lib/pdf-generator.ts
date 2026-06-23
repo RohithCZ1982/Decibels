@@ -12,6 +12,10 @@ interface QuotationData {
   gstAmount: number;
   discount: number;
   grandTotal: number;
+  roundOff?: number;
+  includeGst?: boolean;
+  status?: string;
+  billDate?: string | null;
   notes: string | null;
   terms: string | null;
   title?: string | null;
@@ -28,6 +32,7 @@ interface QuotationData {
     quantity: number;
     unit?: string;
     unitPrice: number;
+    gstRate?: number;
     total: number;
     notes: string | null;
     item?: { code: string; category: { name: string } } | null;
@@ -128,11 +133,13 @@ function drawQuotationPage(
   doc.setFontSize(4);
   doc.text("YEARS", bx, by + 4.5, { align: "center" });
 
-  // "Statement of Quotation"
+  // "Statement of Quotation" or "Tax Invoice"
+  const INVOICE_STATUSES = ["APPROVED", "IN_PRODUCTION", "COMPLETED", "CLOSED"];
+  const isInvoice = q.status && INVOICE_STATUSES.includes(q.status);
   doc.setFontSize(16);
   doc.setFont("times", "bolditalic");
   doc.setTextColor(...RED);
-  doc.text("Statement of Quotation", re, 36, { align: "right" });
+  doc.text(isInvoice ? "Tax Invoice" : "Statement of Quotation", re, 36, { align: "right" });
 
   // --- CUSTOMER DETAILS BOX ---
   const custY = 42;
@@ -184,7 +191,7 @@ function drawQuotationPage(
   doc.setTextColor(...BLACK);
   doc.text("DATE:", dX, custY + 20);
   doc.setTextColor(...RED);
-  doc.text(formatDate(q.createdAt), dX + 18, custY + 20);
+  doc.text(formatDate(q.billDate || q.createdAt), dX + 18, custY + 20);
 
   doc.setTextColor(...BLACK);
   doc.text("Ref. #", dX, custY + 26);
@@ -246,7 +253,34 @@ function drawQuotationPage(
     rowTypes.push("subtotal");
   }
 
-  body.push(["", "", "", "", "", "Total", formatINR(q.grandTotal)]);
+  // --- FINANCIAL SUMMARY ROWS ---
+  body.push(["", "", "", "", "", "Subtotal", formatINR(q.subtotal)]);
+  rowTypes.push("subtotal");
+
+  if (q.includeGst !== false) {
+    const gstMap = new Map<number, number>();
+    for (const item of q.items) {
+      const rate = item.gstRate ?? 18;
+      gstMap.set(rate, (gstMap.get(rate) || 0) + (item.total * rate) / 100);
+    }
+    const gstEntries = Array.from(gstMap.entries()).sort((a, b) => a[0] - b[0]);
+    for (const [rate, amt] of gstEntries) {
+      body.push(["", "", "", "", "", `GST @${rate}%`, formatINR(Math.round(amt))]);
+      rowTypes.push("item");
+    }
+  }
+
+  if (q.discount > 0) {
+    body.push(["", "", "", "", "", "Discount", "-" + formatINR(q.discount)]);
+    rowTypes.push("item");
+  }
+
+  if (q.roundOff && q.roundOff !== 0) {
+    body.push(["", "", "", "", "", "Round Off", (q.roundOff > 0 ? "+" : "") + formatINR(q.roundOff)]);
+    rowTypes.push("item");
+  }
+
+  body.push(["", "", "", "", "", "Grand Total", formatINR(q.grandTotal)]);
   rowTypes.push("total");
 
   autoTable(doc, {
@@ -345,7 +379,7 @@ function drawQuotationPage(
   y += 5;
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
-  doc.text("All Taxes Included (GST).", ml, y);
+  doc.text(q.includeGst !== false ? "GST included as detailed above." : "GST Not Applicable.", ml, y);
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "italic");

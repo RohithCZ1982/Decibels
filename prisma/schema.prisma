@@ -133,6 +133,9 @@ model Quotation {
   terms           String?
   validUntil      DateTime?
   completionDate  DateTime?
+  billDate        DateTime  @default(now())
+  roundOff        Float     @default(0)
+  includeGst      Boolean   @default(true)
 
   customer    Customer  @relation(fields: [customerId], references: [id])
   customerId  String

@@ -113,8 +113,8 @@ export default function UsersPage() {
                 <Select value={form.role} onValueChange={(v: string | null) => setForm({ ...form, role: v || "STAFF" })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="STAFF">Staff</SelectItem>
-                    <SelectItem value="ADMIN">Admin</SelectItem>
+                    <SelectItem value="STAFF" label="Staff">Staff</SelectItem>
+                    <SelectItem value="ADMIN" label="Admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

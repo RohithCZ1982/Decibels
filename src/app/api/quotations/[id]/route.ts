@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withAuth, jsonResponse, errorResponse } from "@/lib/api-helpers";
+import { calculateQuotationTotals, EDITABLE_STATUSES } from "@/lib/quotation-calc";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withAuth(async () => {
@@ -25,40 +26,37 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   return withAuth(async () => {
     const { id } = await params;
     const body = await request.json();
-    const { items, notes, terms, gstPercent, discount, validUntil } = body;
+    const { items, notes, terms, discount, validUntil, billDate, includeGst, enableRoundOff } = body;
 
     const existing = await prisma.quotation.findUnique({ where: { id } });
     if (!existing) return errorResponse("Quotation not found", 404);
-    if (existing.status !== "DRAFT") {
-      return errorResponse("Can only edit quotations in DRAFT status");
+    if (!EDITABLE_STATUSES.includes(existing.status)) {
+      return errorResponse("Cannot edit quotations in COMPLETED or CLOSED status");
     }
 
     if (items) {
       await prisma.quotationItem.deleteMany({ where: { quotationId: id } });
 
-      const subtotal = items.reduce((sum: number, item: { quantity: number; unitPrice: number }) => {
-        return sum + item.quantity * item.unitPrice;
-      }, 0);
-
       const disc = discount ?? existing.discount;
-      const discountRatio = subtotal > 0 ? (subtotal - disc) / subtotal : 1;
-      let gstAmount = 0;
-      for (const item of items as { quantity: number; unitPrice: number; gstRate?: number }[]) {
-        const lineTotal = item.quantity * item.unitPrice;
-        const rate = item.gstRate ?? 18;
-        gstAmount += (lineTotal * discountRatio * rate) / 100;
-      }
-      gstAmount = Math.round(gstAmount);
-      const grandTotal = subtotal - disc + gstAmount;
+      const gstFlag = includeGst ?? existing.includeGst;
+      const calc = calculateQuotationTotals({
+        items,
+        discount: disc,
+        includeGst: gstFlag,
+        roundOff: enableRoundOff ?? (existing.roundOff !== 0),
+      });
 
       const quotation = await prisma.quotation.update({
         where: { id },
         data: {
-          subtotal,
+          subtotal: calc.subtotal,
           gstPercent: 0,
-          gstAmount,
-          discount: disc,
-          grandTotal,
+          gstAmount: calc.gstAmount,
+          discount: calc.discount,
+          grandTotal: calc.grandTotal,
+          roundOff: calc.roundOff,
+          includeGst: gstFlag,
+          billDate: billDate ? new Date(billDate) : undefined,
           notes,
           terms,
           validUntil: validUntil ? new Date(validUntil) : undefined,
@@ -86,9 +84,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return jsonResponse(quotation);
     }
 
+    const updateData: Record<string, unknown> = {};
+    if (notes !== undefined) updateData.notes = notes;
+    if (terms !== undefined) updateData.terms = terms;
+    if (billDate !== undefined) updateData.billDate = new Date(billDate);
+    if (includeGst !== undefined) updateData.includeGst = includeGst;
+
     const quotation = await prisma.quotation.update({
       where: { id },
-      data: { notes, terms },
+      data: updateData,
       include: { customer: true, items: { orderBy: { sortOrder: "asc" } } },
     });
     return jsonResponse(quotation);
