@@ -30,6 +30,14 @@ enum PaymentMode {
   OTHER
 }
 
+enum StockTransactionType {
+  PURCHASE_IN
+  SALE_OUT
+  ADJUSTMENT
+  RETURN
+  INITIAL
+}
+
 model User {
   id        String   @id @default(cuid())
   name      String
@@ -40,9 +48,10 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  quotations   Quotation[]
-  payments     Payment[]
-  projectNotes ProjectNote[]
+  quotations         Quotation[]
+  payments           Payment[]
+  projectNotes       ProjectNote[]
+  stockTransactions  StockTransaction[]
 }
 
 model Category {
@@ -97,8 +106,9 @@ model Item {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  templateItems  TemplateItem[]
-  quotationItems QuotationItem[]
+  templateItems     TemplateItem[]
+  quotationItems    QuotationItem[]
+  stockTransactions StockTransaction[]
 
   @@index([categoryId])
   @@index([subCategoryId])
@@ -175,9 +185,10 @@ model Quotation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  items        QuotationItem[]
-  payments     Payment[]
-  projectNotes ProjectNote[]
+  items             QuotationItem[]
+  payments          Payment[]
+  projectNotes      ProjectNote[]
+  stockTransactions StockTransaction[]
 
   @@index([customerId])
   @@index([status])
@@ -235,4 +246,82 @@ model ProjectNote {
   createdAt DateTime @default(now())
 
   @@index([quotationId])
+}
+
+model StockTransaction {
+  id       String               @id @default(cuid())
+  type     StockTransactionType
+  quantity Int
+  notes    String?
+
+  item   Item   @relation(fields: [itemId], references: [id])
+  itemId String
+
+  quotation   Quotation? @relation(fields: [quotationId], references: [id])
+  quotationId String?
+
+  createdBy   User   @relation(fields: [createdById], references: [id])
+  createdById String
+
+  createdAt DateTime @default(now())
+
+  @@index([itemId])
+  @@index([quotationId])
+}
+
+model Employee {
+  id           String   @id @default(cuid())
+  name         String
+  mobile       String?
+  email        String?
+  role         String?
+  baseSalary   Float    @default(0)
+  advanceLimit Float    @default(0)
+  joinDate     DateTime @default(now())
+  active       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  salaries         Salary[]
+  salaryDeductions SalaryDeduction[]
+
+  @@index([name])
+}
+
+model Salary {
+  id         String @id @default(cuid())
+  month      Int
+  year       Int
+  amount     Float
+  notes      String?
+
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId String
+
+  deductions SalaryDeduction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([employeeId, month, year])
+  @@index([employeeId])
+}
+
+model SalaryDeduction {
+  id          String   @id @default(cuid())
+  amount      Float
+  reason      String
+  date        DateTime @default(now())
+  notes       String?
+
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId  String
+
+  salary      Salary?  @relation(fields: [salaryId], references: [id])
+  salaryId    String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([employeeId])
+  @@index([salaryId])
 }

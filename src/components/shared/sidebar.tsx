@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Volume2,
+  UserCheck,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ const navigation = [
   { name: "Items", href: "/items", icon: Package, adminOnly: true },
   { name: "Templates", href: "/templates", icon: Layers, adminOnly: true },
   { name: "Payments", href: "/payments", icon: CreditCard },
+  { name: "Employees", href: "/employees", icon: UserCheck, adminOnly: true },
   { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Users", href: "/users", icon: Settings, adminOnly: true },
 ];

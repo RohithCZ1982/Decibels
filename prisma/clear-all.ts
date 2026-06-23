@@ -6,6 +6,9 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
+  const stockTx = await prisma.stockTransaction.deleteMany({});
+  console.log("Deleted", stockTx.count, "stock transactions");
+
   const notes = await prisma.projectNote.deleteMany({});
   console.log("Deleted", notes.count, "project notes");
 

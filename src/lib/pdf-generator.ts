@@ -35,7 +35,15 @@ interface QuotationData {
     gstRate?: number;
     total: number;
     notes: string | null;
-    item?: { code: string; category: { name: string } } | null;
+    item?: { code: string; description?: string | null; category: { name: string } } | null;
+  }>;
+  payments?: Array<{
+    amount: number;
+    date: string;
+    mode: string;
+    transactionId: string | null;
+    notes: string | null;
+    recordedBy?: { name: string };
   }>;
 }
 
@@ -81,10 +89,15 @@ export async function generateQuotationPDF(quotation: QuotationData) {
 
   drawQuotationPage(doc, quotation, logoData);
 
+  if (quotation.payments && quotation.payments.length > 0) {
+    doc.addPage();
+    drawPaymentsPage(doc, quotation);
+  }
+
   doc.addPage();
   drawTermsPage(doc);
 
-  doc.save(`${quotation.quotationNumber}.pdf`);
+  window.open(doc.output("bloburl"), "_blank");
 }
 
 function drawQuotationPage(
@@ -232,7 +245,7 @@ function drawQuotationPage(
   });
 
   const body: string[][] = [];
-  const rowTypes: ("item" | "subtotal" | "total")[] = [];
+  const rowTypes: ("item" | "desc" | "subtotal" | "total")[] = [];
   let sl = 1;
 
   for (const group of groups) {
@@ -247,6 +260,13 @@ function drawQuotationPage(
         "",
       ]);
       rowTypes.push("item");
+
+      const desc = item.item?.description;
+      if (desc) {
+        body.push(["", desc, "", "", "", "", ""]);
+        rowTypes.push("desc");
+      }
+
       sl++;
     }
     body.push(["", "", "", "", "", "", formatINR(group.subtotal)]);
@@ -313,6 +333,12 @@ function drawQuotationPage(
     didParseCell: (data) => {
       if (data.section !== "body") return;
       const rt = rowTypes[data.row.index];
+      if (rt === "desc") {
+        data.cell.styles.textColor = [100, 100, 100] as [number, number, number];
+        data.cell.styles.fontStyle = "italic";
+        data.cell.styles.fontSize = 6.5;
+        data.cell.styles.cellPadding = { top: 0, bottom: 2, left: 1.5, right: 1.5 };
+      }
       if (rt === "subtotal") {
         data.cell.styles.textColor = RED;
         data.cell.styles.fontStyle = "bold";
@@ -389,6 +415,87 @@ function drawQuotationPage(
   doc.setFontSize(10);
   doc.setTextColor(...BLACK);
   doc.text(q.createdBy?.name || "N Manikantan Iyer", re - 40, y + 16);
+}
+
+function drawPaymentsPage(doc: jsPDF, q: QuotationData) {
+  const ml = 10;
+  const re = 200;
+
+  // Header
+  doc.setFontSize(16);
+  doc.setFont("times", "bolditalic");
+  doc.setTextColor(...RED);
+  doc.text("Payments", re, 20, { align: "right" });
+
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(60, 60, 60);
+  doc.text(`Ref: ${q.quotationNumber}`, ml, 20);
+  doc.text(`Customer: ${q.customer.name}`, ml, 25);
+
+  doc.setDrawColor(...RED);
+  doc.setLineWidth(0.5);
+  doc.line(ml, 30, re, 30);
+
+  const payments = q.payments || [];
+  const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
+  const balance = q.grandTotal - totalPaid;
+
+  // Summary bar
+  const sumY = 34;
+  doc.setFillColor(248, 248, 238);
+  doc.rect(ml, sumY, re - ml, 10, "F");
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...BLACK);
+  doc.text(`Grand Total: ${formatINR(q.grandTotal)}`, ml + 4, sumY + 7);
+  doc.text(`Total Paid: ${formatINR(totalPaid)}`, ml + 70, sumY + 7);
+  doc.setTextColor(balance > 0 ? RED[0] : 0, balance > 0 ? RED[1] : 120, balance > 0 ? RED[2] : 0);
+  doc.text(`Balance: ${formatINR(balance)}`, ml + 140, sumY + 7);
+
+  // Payments table
+  autoTable(doc, {
+    startY: sumY + 16,
+    margin: { left: ml, right: ml },
+    head: [["#", "Date", "Amount", "Mode", "Transaction ID", "Notes", "Recorded By"]],
+    body: payments.map((p, i) => [
+      (i + 1).toString(),
+      formatDate(p.date),
+      formatINR(p.amount),
+      p.mode.replace(/_/g, " "),
+      p.transactionId || "—",
+      p.notes || "—",
+      p.recordedBy?.name || "—",
+    ]),
+    foot: [["", "", formatINR(totalPaid), "", "", "", ""]],
+    theme: "grid",
+    headStyles: {
+      fillColor: [RED[0], RED[1], RED[2]],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 8,
+    },
+    bodyStyles: {
+      fontSize: 8,
+      textColor: BLACK,
+      cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
+    },
+    footStyles: {
+      fillColor: [248, 248, 238],
+      textColor: BLACK,
+      fontStyle: "bold",
+      fontSize: 9,
+    },
+    columnStyles: {
+      0: { cellWidth: 10, halign: "center" },
+      1: { cellWidth: 24 },
+      2: { cellWidth: 28, halign: "right" },
+      3: { cellWidth: 28 },
+      4: { cellWidth: 32 },
+      5: { cellWidth: 38 },
+      6: { cellWidth: 30 },
+    },
+  });
 }
 
 function renderWrappedAfterLabel(

@@ -21,8 +21,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Edit2, Trash2, Package } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Package, PackagePlus, History } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
 
 interface SubCategory {
   id: string;
@@ -62,6 +63,24 @@ interface Item {
   subCategory: SubCategory | null;
   subCategoryId: string | null;
 }
+
+interface StockTransaction {
+  id: string;
+  type: string;
+  quantity: number;
+  notes: string | null;
+  createdAt: string;
+  createdBy: { name: string };
+  quotation: { quotationNumber: string } | null;
+}
+
+const STOCK_TYPE_LABELS: Record<string, string> = {
+  PURCHASE_IN: "Purchase In",
+  SALE_OUT: "Sale Out",
+  ADJUSTMENT: "Adjustment",
+  RETURN: "Return",
+  INITIAL: "Initial Stock",
+};
 
 const emptyForm = {
   code: "",
@@ -108,6 +127,20 @@ export default function ItemsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+
+  // Stock dialogs
+  const [stockDialogOpen, setStockDialogOpen] = useState(false);
+  const [stockItem, setStockItem] = useState<Item | null>(null);
+  const [stockType, setStockType] = useState("PURCHASE_IN");
+  const [stockQty, setStockQty] = useState("");
+  const [stockNotes, setStockNotes] = useState("");
+  const [stockSaving, setStockSaving] = useState(false);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [historyItem, setHistoryItem] = useState<Item | null>(null);
+  const [stockHistory, setStockHistory] = useState<StockTransaction[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const { user } = useAuth();
 
   const brands = Array.from(new Set(items.map((i) => i.brand).filter(Boolean))) as string[];
 
@@ -260,6 +293,47 @@ export default function ItemsPage() {
     }
   };
 
+  const openStockDialog = (item: Item) => {
+    setStockItem(item);
+    setStockType("PURCHASE_IN");
+    setStockQty("");
+    setStockNotes("");
+    setStockDialogOpen(true);
+  };
+
+  const handleStockAdjust = async () => {
+    if (!stockItem || !stockQty || parseInt(stockQty) <= 0) {
+      toast.error("Enter a positive quantity");
+      return;
+    }
+    setStockSaving(true);
+    const res = await fetch(`/api/items/${stockItem.id}/stock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: stockType, quantity: parseInt(stockQty), notes: stockNotes || null }),
+    });
+    if (res.ok) {
+      toast.success("Stock updated");
+      setStockDialogOpen(false);
+      loadData();
+    } else {
+      const data = await res.json();
+      toast.error(data.error || "Failed to update stock");
+    }
+    setStockSaving(false);
+  };
+
+  const openHistory = async (item: Item) => {
+    setHistoryItem(item);
+    setHistoryDialogOpen(true);
+    setHistoryLoading(true);
+    const res = await fetch(`/api/items/${item.id}/stock`);
+    if (res.ok) {
+      setStockHistory(await res.json());
+    }
+    setHistoryLoading(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -276,112 +350,28 @@ export default function ItemsPage() {
               Add Item
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-[90vw] w-[1100px]">
             <DialogHeader>
               <DialogTitle>{editingItem ? "Edit Item" : "Add New Item"}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-6 mt-2">
-              {/* Basic Info */}
+            <div className="grid grid-cols-2 gap-6 mt-2">
+              {/* Left Column */}
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Basic Info</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1">
                     <Label>Item Code *</Label>
-                    <Input
-                      value={form.code}
-                      onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
-                      placeholder={editingItem ? "" : "Auto-generated..."}
-                    />
+                    <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder={editingItem ? "" : "Auto-generated..."} />
                   </div>
-                  <div className="space-y-2 col-span-2">
-                    <Label>Name *</Label>
-                    <Input
-                      value={form.name}
-                      onChange={(e) => setForm({ ...form, name: e.target.value })}
-                      placeholder="Product name"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     <Label>Brand</Label>
-                    <Input
-                      value={form.brand}
-                      onChange={(e) => setForm({ ...form, brand: e.target.value })}
-                      placeholder="e.g. YAMAHA"
-                      list="brand-list"
-                    />
-                    <datalist id="brand-list">
-                      {brands.map((b) => (
-                        <option key={b} value={b} />
-                      ))}
-                    </datalist>
+                    <Input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} placeholder="e.g. YAMAHA" list="brand-list" />
+                    <datalist id="brand-list">{brands.map((b) => <option key={b} value={b} />)}</datalist>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Category *</Label>
-                    <Select
-                      value={form.categoryId}
-                      onValueChange={(v: string | null) => {
-                        const val = v || "";
-                        setForm({ ...form, categoryId: val, subCategoryId: "" });
-                        setShowNewCategory(val === "__new__");
-                        setShowNewSubCategory(false);
-                      }}
-                    >
-                      <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                      <SelectContent>
-                        {categories.map((c) => (
-                          <SelectItem key={c.id} value={c.id} label={c.name}>{c.name}</SelectItem>
-                        ))}
-                        <SelectItem value="__new__" label="+ New Category">+ New Category</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {showNewCategory && (
-                      <Input
-                        value={newCategory}
-                        onChange={(e) => setNewCategory(e.target.value)}
-                        placeholder="New category name"
-                        className="mt-2"
-                      />
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Sub-Category</Label>
-                    <Select
-                      value={form.subCategoryId || "none"}
-                      onValueChange={(v: string | null) => {
-                        const val = v || "none";
-                        setForm({ ...form, subCategoryId: val === "none" ? "" : val });
-                        setShowNewSubCategory(val === "__new__");
-                      }}
-                    >
-                      <SelectTrigger><SelectValue placeholder="Select sub-category" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none" label="None">None</SelectItem>
-                        {formSubCategories.map((s) => (
-                          <SelectItem key={s.id} value={s.id} label={s.name}>{s.name}</SelectItem>
-                        ))}
-                        <SelectItem value="__new__" label="+ New Sub-Category">+ New Sub-Category</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {showNewSubCategory && (
-                      <Input
-                        value={newSubCategory}
-                        onChange={(e) => setNewSubCategory(e.target.value)}
-                        placeholder="New sub-category name"
-                        className="mt-2"
-                      />
-                    )}
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     <Label>Unit</Label>
-                    <Select
-                      value={form.unit}
-                      onValueChange={(v: string | null) => setForm({ ...form, unit: v || "Pc(s)" })}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <Select value={form.unit} onValueChange={(v: string | null) => setForm({ ...form, unit: v || "Pc(s)" })}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Pc(s)" label="Pc(s)">Pc(s)</SelectItem>
                         <SelectItem value="PAIR" label="PAIR">PAIR</SelectItem>
@@ -391,67 +381,80 @@ export default function ItemsPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2 col-span-2">
-                    <Label>Description</Label>
-                    <Textarea
-                      value={form.description}
-                      onChange={(e) => setForm({ ...form, description: e.target.value })}
-                      placeholder="Describe this product..."
-                      rows={2}
-                    />
+                </div>
+                <div className="space-y-1">
+                  <Label>Name *</Label>
+                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Product name" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Category *</Label>
+                    <Select value={form.categoryId} onValueChange={(v: string | null) => { const val = v || ""; setForm({ ...form, categoryId: val, subCategoryId: "" }); setShowNewCategory(val === "__new__"); setShowNewSubCategory(false); }}>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Select category" /></SelectTrigger>
+                      <SelectContent>
+                        {categories.map((c) => <SelectItem key={c.id} value={c.id} label={c.name}>{c.name}</SelectItem>)}
+                        <SelectItem value="__new__" label="+ New Category">+ New Category</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {showNewCategory && <Input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="New category name" className="mt-1" />}
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Sub-Category</Label>
+                    <Select value={form.subCategoryId || "none"} onValueChange={(v: string | null) => { const val = v || "none"; setForm({ ...form, subCategoryId: val === "none" ? "" : val }); setShowNewSubCategory(val === "__new__"); }}>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="None" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none" label="None">None</SelectItem>
+                        {formSubCategories.map((s) => <SelectItem key={s.id} value={s.id} label={s.name}>{s.name}</SelectItem>)}
+                        <SelectItem value="__new__" label="+ New Sub-Category">+ New Sub-Category</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {showNewSubCategory && <Input value={newSubCategory} onChange={(e) => setNewSubCategory(e.target.value)} placeholder="New sub-category" className="mt-1" />}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label>Description</Label>
+                  <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe this product..." rows={2} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Supplier</Label>
+                    <Input value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} placeholder="Supplier name" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Image URL</Label>
+                    <Input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://..." />
                   </div>
                 </div>
               </div>
 
-              {/* Pricing */}
+              {/* Right Column */}
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Pricing</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
                     <Label>Selling Price (INR) *</Label>
-                    <Input
-                      type="number"
-                      value={form.unitPrice}
-                      onChange={(e) => setForm({ ...form, unitPrice: e.target.value })}
-                      placeholder="25000"
-                    />
+                    <Input type="number" value={form.unitPrice} onChange={(e) => setForm({ ...form, unitPrice: e.target.value })} placeholder="25000" />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     <Label>Purchase Price (Excl. Tax)</Label>
-                    <Input
-                      type="number"
-                      value={form.purchasePrice}
-                      onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })}
-                      placeholder="0"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Purchase Price (Incl. Tax)</Label>
-                    <Input
-                      type="number"
-                      value={form.purchasePriceInclTax}
-                      onChange={(e) => setForm({ ...form, purchasePriceInclTax: e.target.value })}
-                      placeholder="0"
-                    />
+                    <Input type="number" value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })} placeholder="0" />
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="space-y-2">
-                    <Label>Profit Margin %</Label>
-                    <Input
-                      type="number"
-                      value={form.profitMargin}
-                      onChange={(e) => setForm({ ...form, profitMargin: e.target.value })}
-                      placeholder="5"
-                    />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Purchase Price (Incl. Tax)</Label>
+                    <Input type="number" value={form.purchasePriceInclTax} onChange={(e) => setForm({ ...form, purchasePriceInclTax: e.target.value })} placeholder="0" />
                   </div>
-                  <div className="space-y-2">
-                    <Label>GST Rate (%)</Label>
-                    <Select
-                      value={form.gstRate}
-                      onValueChange={(v: string | null) => setForm({ ...form, gstRate: v || "18" })}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                  <div className="space-y-1">
+                    <Label>Profit Margin %</Label>
+                    <Input type="number" value={form.profitMargin} onChange={(e) => setForm({ ...form, profitMargin: e.target.value })} placeholder="5" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label>GST Rate</Label>
+                    <Select value={form.gstRate} onValueChange={(v: string | null) => setForm({ ...form, gstRate: v || "18" })}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="0" label="0%">0%</SelectItem>
                         <SelectItem value="5" label="5%">5%</SelectItem>
@@ -461,99 +464,51 @@ export default function ItemsPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     <Label>Tax Type</Label>
-                    <Select
-                      value={form.taxType}
-                      onValueChange={(v: string | null) => setForm({ ...form, taxType: v || "exclusive" })}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <Select value={form.taxType} onValueChange={(v: string | null) => setForm({ ...form, taxType: v || "exclusive" })}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="exclusive" label="Exclusive">Exclusive</SelectItem>
                         <SelectItem value="inclusive" label="Inclusive">Inclusive</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     <Label>HSN Code</Label>
-                    <Input
-                      value={form.hsnCode}
-                      onChange={(e) => setForm({ ...form, hsnCode: e.target.value })}
-                      placeholder="e.g. 85184000"
-                    />
+                    <Input value={form.hsnCode} onChange={(e) => setForm({ ...form, hsnCode: e.target.value })} placeholder="e.g. 85184000" />
                   </div>
                 </div>
-              </div>
 
-              {/* Inventory */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Inventory</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide pt-2">Inventory</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1">
                     <Label>Manage Stock</Label>
-                    <Select
-                      value={form.manageStock ? "yes" : "no"}
-                      onValueChange={(v: string | null) => setForm({ ...form, manageStock: v === "yes" })}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <Select value={form.manageStock ? "yes" : "no"} onValueChange={(v: string | null) => setForm({ ...form, manageStock: v === "yes" })}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="no" label="No">No</SelectItem>
                         <SelectItem value="yes" label="Yes">Yes</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  {form.manageStock && (
-                    <div className="space-y-2">
-                      <Label>Alert Quantity</Label>
-                      <Input
-                        type="number"
-                        value={form.alertQuantity}
-                        onChange={(e) => setForm({ ...form, alertQuantity: e.target.value })}
-                        placeholder="0"
-                      />
-                    </div>
-                  )}
-                  <div className="space-y-2">
+                  <div className="space-y-1">
+                    <Label>Alert Qty</Label>
+                    <Input type="number" value={form.alertQuantity} onChange={(e) => setForm({ ...form, alertQuantity: e.target.value })} placeholder="0" disabled={!form.manageStock} />
+                  </div>
+                  <div className="space-y-1">
                     <Label>Current Stock</Label>
-                    <Input
-                      type="number"
-                      value={form.stock}
-                      onChange={(e) => setForm({ ...form, stock: e.target.value })}
-                      placeholder="Optional"
-                    />
+                    <Input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="0" />
                   </div>
                 </div>
-              </div>
 
-              {/* Other */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Other</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Supplier</Label>
-                    <Input
-                      value={form.supplier}
-                      onChange={(e) => setForm({ ...form, supplier: e.target.value })}
-                      placeholder="Supplier name"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Image URL</Label>
-                    <Input
-                      value={form.imageUrl}
-                      onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-                      placeholder="https://..."
-                    />
-                  </div>
-                </div>
               </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                <Button onClick={handleSave} disabled={saving}>
-                  {saving ? "Saving..." : editingItem ? "Update" : "Create"}
-                </Button>
-              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-3 border-t border-border mt-4">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : editingItem ? "Update" : "Create"}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -670,8 +625,19 @@ export default function ItemsPage() {
                         {item.supplier && (
                           <span className="text-xs text-muted-foreground">{item.supplier}</span>
                         )}
-                        {item.stock != null && (
-                          <span className="text-xs text-muted-foreground">Stock: {item.stock}</span>
+                        {item.manageStock && (
+                          <button
+                            onClick={() => openHistory(item)}
+                            className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded cursor-pointer ${
+                              (item.stock ?? 0) === 0
+                                ? "bg-red-500/20 text-red-400"
+                                : (item.stock ?? 0) <= item.alertQuantity
+                                  ? "bg-yellow-500/20 text-yellow-400"
+                                  : "bg-green-500/20 text-green-400"
+                            }`}
+                          >
+                            Stock: {item.stock ?? 0}
+                          </button>
                         )}
                       </div>
                     </div>
@@ -688,6 +654,16 @@ export default function ItemsPage() {
                       )}
                     </div>
                     <div className="flex gap-1">
+                      {item.manageStock && user?.role === "ADMIN" && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-green-400" onClick={() => openStockDialog(item)} title="Adjust Stock">
+                          <PackagePlus className="w-4 h-4" />
+                        </Button>
+                      )}
+                      {item.manageStock && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-blue-400" onClick={() => openHistory(item)} title="Stock History">
+                          <History className="w-4 h-4" />
+                        </Button>
+                      )}
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(item)}>
                         <Edit2 className="w-4 h-4" />
                       </Button>
@@ -721,6 +697,106 @@ export default function ItemsPage() {
           )}
         </div>
       )}
+      {/* Stock Adjustment Dialog */}
+      <Dialog open={stockDialogOpen} onOpenChange={setStockDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Adjust Stock — {stockItem?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="text-sm text-muted-foreground">
+              Current stock: <span className="font-medium text-foreground">{stockItem?.stock ?? 0}</span>
+            </div>
+            <div className="space-y-2">
+              <Label>Transaction Type</Label>
+              <Select value={stockType} onValueChange={(v: string | null) => setStockType(v || "PURCHASE_IN")}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PURCHASE_IN" label="Purchase In">Purchase In</SelectItem>
+                  <SelectItem value="ADJUSTMENT" label="Adjustment">Adjustment</SelectItem>
+                  <SelectItem value="INITIAL" label="Initial Stock">Initial Stock</SelectItem>
+                  <SelectItem value="RETURN" label="Return">Return</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Quantity</Label>
+              <Input
+                type="number"
+                min={1}
+                value={stockQty}
+                onChange={(e) => setStockQty(e.target.value)}
+                placeholder="Enter quantity"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Input
+                value={stockNotes}
+                onChange={(e) => setStockNotes(e.target.value)}
+                placeholder="Optional notes"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setStockDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleStockAdjust} disabled={stockSaving}>
+                {stockSaving ? "Saving..." : "Update Stock"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stock History Dialog */}
+      <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Stock History — {historyItem?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="mt-2">
+            <div className="text-sm text-muted-foreground mb-4">
+              Current stock: <span className="font-medium text-foreground">{historyItem?.stock ?? 0}</span>
+            </div>
+            {historyLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : stockHistory.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">No stock transactions yet</p>
+            ) : (
+              <div className="space-y-2">
+                {stockHistory.map((tx) => (
+                  <div key={tx.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant={tx.type === "SALE_OUT" ? "destructive" : "default"}
+                          className="text-[10px]"
+                        >
+                          {STOCK_TYPE_LABELS[tx.type] || tx.type}
+                        </Badge>
+                        <span className={`text-sm font-semibold ${
+                          tx.type === "SALE_OUT" ? "text-red-400" : "text-green-400"
+                        }`}>
+                          {tx.type === "SALE_OUT" ? "-" : "+"}{tx.quantity}
+                        </span>
+                      </div>
+                      <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
+                        <span>{tx.createdBy.name}</span>
+                        <span>{new Date(tx.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                      </div>
+                      {tx.notes && <p className="text-xs text-muted-foreground mt-1">{tx.notes}</p>}
+                      {tx.quotation && (
+                        <p className="text-xs text-blue-400 mt-1">Quotation: {tx.quotation.quotationNumber}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

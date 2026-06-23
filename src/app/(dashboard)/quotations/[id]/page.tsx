@@ -79,7 +79,7 @@ interface QuotationDetail {
     gstRate: number;
     total: number;
     notes: string | null;
-    item: { code: string; category: { name: string } } | null;
+    item: { code: string; description: string | null; category: { name: string } } | null;
   }>;
   payments: Array<{
     id: string;

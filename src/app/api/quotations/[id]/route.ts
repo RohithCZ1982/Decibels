@@ -11,7 +11,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       include: {
         customer: true,
         template: true,
-        items: { include: { item: { include: { category: true } } }, orderBy: { sortOrder: "asc" } },
+        items: { include: { item: { select: { code: true, description: true, category: { select: { name: true } } } } }, orderBy: { sortOrder: "asc" } },
         payments: { orderBy: { date: "desc" }, include: { recordedBy: { select: { name: true } } } },
         projectNotes: { orderBy: { createdAt: "desc" }, include: { createdBy: { select: { name: true } } } },
         createdBy: { select: { id: true, name: true } },

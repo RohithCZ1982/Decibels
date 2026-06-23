@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { Phone } from "lucide-react";
+import { Phone, AlertTriangle } from "lucide-react";
 
 interface Quotation {
   id: string;
@@ -14,9 +14,14 @@ interface Quotation {
   customer: { name: string; mobile: string };
 }
 
-interface DashboardData {
-  recentQuotations: Quotation[];
-  outstandingList: Quotation[];
+interface LowStockItem {
+  id: string;
+  name: string;
+  code: string;
+  stock: number | null;
+  alertQuantity: number;
+  brand: string | null;
+  category: { name: string };
 }
 
 const STATUSES = [
@@ -30,13 +35,17 @@ const STATUSES = [
 
 export default function DashboardPage() {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/quotations?limit=500")
-      .then((r) => r.json())
-      .then((d) => setQuotations(d.quotations || []))
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch("/api/quotations?limit=500").then((r) => r.json()),
+      fetch("/api/dashboard").then((r) => r.json()),
+    ]).then(([qData, dashData]) => {
+      setQuotations(qData.quotations || []);
+      setLowStockItems(dashData.lowStockItems || []);
+    }).finally(() => setLoading(false));
   }, []);
 
   const statusCounts = useMemo(() => {
@@ -108,6 +117,47 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Low Stock Alerts */}
+      {lowStockItems.length > 0 && (
+        <Card className="border-yellow-500/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-yellow-400" />
+              Low Stock Alerts
+              <Badge variant="outline" className="ml-1 text-xs bg-yellow-500/10 text-yellow-400 border-yellow-500/30">
+                {lowStockItems.length}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {lowStockItems.map((item) => (
+                <Link key={item.id} href="/items">
+                  <div className="flex items-center justify-between p-3 rounded-lg hover:bg-accent/50 transition-colors">
+                    <div>
+                      <p className="text-sm font-medium">{item.name}</p>
+                      <div className="flex gap-2 mt-0.5 text-xs text-muted-foreground">
+                        <span>{item.code}</span>
+                        {item.brand && <span>{item.brand}</span>}
+                        <span>{item.category.name}</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-sm font-semibold ${
+                        (item.stock ?? 0) === 0 ? "text-red-400" : "text-yellow-400"
+                      }`}>
+                        {item.stock ?? 0}
+                      </span>
+                      <p className="text-[10px] text-muted-foreground">alert at {item.alertQuantity}</p>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Quotations grouped by status */}
       {activeStatuses.map((s) => {

@@ -33,6 +33,14 @@ export async function GET() {
       prisma.payment.aggregate({ _sum: { amount: true } }),
     ]);
 
+    const managedItems = await prisma.item.findMany({
+      where: { manageStock: true, active: true },
+      select: { id: true, name: true, code: true, stock: true, alertQuantity: true, brand: true, category: { select: { name: true } } },
+    });
+    const lowStockItems = managedItems
+      .filter((item) => (item.stock ?? 0) <= item.alertQuantity)
+      .sort((a, b) => (a.stock ?? 0) - (b.stock ?? 0));
+
     const pendingPayments = await prisma.quotation.findMany({
       where: {
         status: { in: ["APPROVED", "IN_PRODUCTION", "COMPLETED"] },
@@ -68,6 +76,7 @@ export async function GET() {
       ),
       recentQuotations,
       outstandingList,
+      lowStockItems,
     });
   });
 }
