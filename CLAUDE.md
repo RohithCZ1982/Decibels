@@ -62,6 +62,10 @@ Client-side via jsPDF + jspdf-autotable in `src/lib/pdf-generator.ts`. Marked `"
 
 Requires `DATABASE_URL` (PostgreSQL connection string) and `NEXTAUTH_SECRET` (JWT signing key). See `.env.example`.
 
+## IMPORTANT: Data Safety
+
+**NEVER clear, delete, or truncate Items, Categories, SubCategories, Quotations, or Employees from the database.** These contain production data imported from the master Excel sheet and live business records. Do not run `clear-all.ts` or any `deleteMany()` on these tables. Schema changes must use `db:push` without `--accept-data-loss` unless explicitly approved by the user.
+
 ## Seed credentials
 
 Admin: `admin@decibels.audio` / `admin123` | Staff: `staff@decibels.audio` / `staff123`

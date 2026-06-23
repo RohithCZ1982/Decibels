@@ -72,6 +72,7 @@ interface QuotationDetail {
   items: Array<{
     id: string;
     name: string;
+    description: string | null;
     hsnCode: string | null;
     quantity: number;
     unit: string;
@@ -177,6 +178,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
       quotation.items.map((item) => ({
         key: nextLineItemKey(),
         name: item.name,
+        description: item.description || "",
         hsnCode: item.hsnCode || "",
         quantity: item.quantity,
         unit: item.unit || "No",
@@ -210,6 +212,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
       body: JSON.stringify({
         items: validItems.map((li) => ({
           name: li.name,
+          description: li.description || null,
           hsnCode: li.hsnCode || null,
           quantity: li.quantity,
           unit: li.unit || "No",

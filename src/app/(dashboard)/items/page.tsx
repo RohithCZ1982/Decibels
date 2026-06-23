@@ -350,7 +350,7 @@ export default function ItemsPage() {
               Add Item
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-[90vw] w-[1100px]">
+          <DialogContent className="!w-[80vw] !max-w-[80vw]">
             <DialogHeader>
               <DialogTitle>{editingItem ? "Edit Item" : "Add New Item"}</DialogTitle>
             </DialogHeader>

@@ -2,6 +2,7 @@
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { registerPoppins } from "./pdf-fonts";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -20,53 +21,69 @@ function formatINR(n: number) {
   return "Rs. " + new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(n);
 }
 
-const RED: [number, number, number] = [180, 40, 40];
+const PINK: [number, number, number] = [200, 50, 60];
 const BLACK: [number, number, number] = [30, 30, 30];
-const GOLD: [number, number, number] = [180, 150, 50];
 
-export function generateSalaryReceiptPDF(data: SalaryReceiptData) {
+function loadImage(src: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => resolve("");
+    img.src = src;
+  });
+}
+
+export async function generateSalaryReceiptPDF(data: SalaryReceiptData) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pw = 210;
   const ml = 10;
   const re = pw - ml;
   const cw = pw - ml * 2;
 
-  // --- HEADER (same as quotation) ---
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bolditalic");
-  doc.setTextColor(...RED);
-  doc.text("Decibels", ml, 12);
-  doc.setFontSize(6);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(80, 80, 80);
-  doc.text("a u d i o   s y s t e m s", ml, 17);
+  const [logoData, badgeData] = await Promise.all([
+    loadImage("/logo.png"),
+    loadImage("/25years.png"),
+  ]);
+
+  await registerPoppins(doc);
+
+  // --- HEADER ---
+  if (logoData) {
+    doc.addImage(logoData, "PNG", ml, 6, 55, 10);
+  } else {
+    doc.setFontSize(18);
+    doc.setFont("Poppins", "bolditalic");
+    doc.setTextColor(...PINK);
+    doc.text("Decibels", ml, 12);
+    doc.setFontSize(6);
+    doc.setFont("Poppins", "normal");
+    doc.setTextColor(80, 80, 80);
+    doc.text("a u d i o   s y s t e m s", ml, 17);
+  }
 
   doc.setFontSize(6);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("Poppins", "normal");
   doc.setTextColor(60, 60, 60);
-  doc.text("#277/A, Hebbal Industrial Area, Mysuru – 570 027,", ml, 18);
-  doc.text("Karnataka, INDIA. Ph : 08212331331 Mobile: 9972449311", ml, 21.5);
-  doc.text("mani@decibelsaudio.com website: www.decibelsaudio.com", ml, 25);
+  doc.text("#277/A, Hebbal Industrial Area, Mysuru – 570 027,", ml, 20);
+  doc.text("Karnataka, INDIA. Ph : 08212331331 Mobile: 9972449311", ml, 23.5);
+  doc.text("mani@decibelsaudio.com website: www.decibelsaudio.com", ml, 27);
 
-  // 25 Years badge
-  const bx = re - 12;
-  const by = 12;
-  doc.setDrawColor(...GOLD);
-  doc.setLineWidth(1);
-  doc.circle(bx, by, 9);
-  doc.setLineWidth(0.4);
-  doc.circle(bx, by, 7.5);
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...GOLD);
-  doc.text("25", bx, by + 1, { align: "center" });
-  doc.setFontSize(4);
-  doc.text("YEARS", bx, by + 4.5, { align: "center" });
+  if (badgeData) {
+    doc.addImage(badgeData, "PNG", re - 22, 4, 22, 22);
+  }
 
   // Title
   doc.setFontSize(16);
-  doc.setFont("times", "bolditalic");
-  doc.setTextColor(...RED);
+  doc.setFont("Poppins", "bold");
+  doc.setTextColor(...PINK);
   doc.text("Salary Receipt", re, 36, { align: "right" });
 
   // --- EMPLOYEE DETAILS BOX ---
@@ -83,42 +100,42 @@ export function generateSalaryReceiptPDF(data: SalaryReceiptData) {
   doc.setFillColor(100, 130, 85);
   doc.rect(ml, custY, 32, 7, "F");
   doc.setFontSize(7);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.setTextColor(255, 255, 255);
   doc.text("Employee Details", ml + 1.5, custY + 5);
 
   // Employee name
   doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.setTextColor(...BLACK);
   doc.text(data.employeeName, ml + 2, custY + 15);
 
   if (data.employeeRole) {
     doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
+    doc.setFont("Poppins", "normal");
     doc.text(data.employeeRole, ml + 2, custY + 21);
   }
 
   // Period & Date
   const dX = re - 55;
   doc.setFontSize(8);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.setTextColor(...BLACK);
   doc.text("PAY PERIOD:", dX, custY + 15);
-  doc.setTextColor(...RED);
+  doc.setTextColor(...PINK);
   doc.text(`${MONTHS[data.month - 1]} ${data.year}`, dX + 28, custY + 15);
 
   doc.setTextColor(...BLACK);
   doc.text("DATE:", dX, custY + 21);
-  doc.setTextColor(...RED);
+  doc.setTextColor(...PINK);
   doc.text(new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }), dX + 28, custY + 21);
 
-  // --- RED TITLE BAR ---
+  // --- TITLE BAR ---
   const barY = custY + custH + 4;
-  doc.setFillColor(...RED);
+  doc.setFillColor(...PINK);
   doc.rect(ml, barY, cw, 8, "F");
   doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.setTextColor(255, 255, 255);
   doc.text(`Salary Statement - ${MONTHS[data.month - 1]} ${data.year}`, pw / 2, barY + 5.5, { align: "center" });
 
@@ -133,26 +150,27 @@ export function generateSalaryReceiptPDF(data: SalaryReceiptData) {
     foot: [["Total Earnings", formatINR(data.salary)]],
     theme: "plain",
     styles: {
-      fontSize: 9,
+      font: "Poppins",
+      fontSize: 10,
       cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
       textColor: BLACK,
     },
     headStyles: {
       fillColor: [255, 255, 255],
-      textColor: RED,
+      textColor: PINK,
       fontStyle: "bold",
-      fontSize: 9,
+      fontSize: 10,
     },
     footStyles: {
       fillColor: [248, 248, 238],
       textColor: BLACK,
       fontStyle: "bold",
-      fontSize: 10,
+      fontSize: 11,
     },
     columnStyles: { 1: { halign: "right", cellWidth: 40 } },
     didDrawCell: (cellData) => {
       if (cellData.section === "head" && cellData.column.index === 1) {
-        doc.setDrawColor(...RED);
+        doc.setDrawColor(...PINK);
         doc.setLineWidth(0.5);
         const ly = cellData.cell.y + cellData.cell.height;
         doc.line(ml, ly, re, ly);
@@ -166,8 +184,8 @@ export function generateSalaryReceiptPDF(data: SalaryReceiptData) {
   // --- DEDUCTIONS TABLE ---
   if (data.deductions.length > 0) {
     doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...RED);
+    doc.setFont("Poppins", "bold");
+    doc.setTextColor(...PINK);
     doc.text("Deductions", ml, y);
     y += 2;
 
@@ -179,26 +197,27 @@ export function generateSalaryReceiptPDF(data: SalaryReceiptData) {
       foot: [["Total Deductions", formatINR(data.totalDeductions)]],
       theme: "plain",
       styles: {
-        fontSize: 9,
+        font: "Poppins",
+        fontSize: 10,
         cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
         textColor: BLACK,
       },
       headStyles: {
         fillColor: [255, 255, 255],
-        textColor: RED,
+        textColor: PINK,
         fontStyle: "bold",
-        fontSize: 9,
+        fontSize: 10,
       },
       footStyles: {
         fillColor: [255, 245, 245],
-        textColor: RED,
+        textColor: PINK,
         fontStyle: "bold",
-        fontSize: 10,
+        fontSize: 11,
       },
       columnStyles: { 1: { halign: "right", cellWidth: 40 } },
       didDrawCell: (cellData) => {
         if (cellData.section === "head" && cellData.column.index === 1) {
-          doc.setDrawColor(...RED);
+          doc.setDrawColor(...PINK);
           doc.setLineWidth(0.3);
           const ly = cellData.cell.y + cellData.cell.height;
           doc.line(ml, ly, re, ly);
@@ -216,21 +235,21 @@ export function generateSalaryReceiptPDF(data: SalaryReceiptData) {
   doc.line(ml, y, re, y);
   y += 3;
 
-  doc.setFillColor(...RED);
+  doc.setFillColor(...PINK);
   doc.rect(ml, y, cw, 10, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.text("NET PAY", ml + 4, y + 7);
   doc.text(formatINR(data.netPay), re - 4, y + 7, { align: "right" });
 
   // --- SIGNATURE ---
   y += 30;
   doc.setFontSize(9);
-  doc.setFont("helvetica", "italic");
+  doc.setFont("Poppins", "italic");
   doc.setTextColor(80, 80, 80);
   doc.text("Authorized by", re - 40, y);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.setFontSize(10);
   doc.setTextColor(...BLACK);
   doc.text("N Manikantan Iyer", re - 40, y + 8);
@@ -239,7 +258,7 @@ export function generateSalaryReceiptPDF(data: SalaryReceiptData) {
   const footerY = doc.internal.pageSize.getHeight() - 15;
   doc.setTextColor(150, 150, 150);
   doc.setFontSize(7);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("Poppins", "normal");
   doc.text("This is a computer-generated document. No signature required.", pw / 2, footerY, { align: "center" });
   doc.text("Decibels Audio Pvt Ltd | #277/A, Hebbal Industrial Area, Mysuru - 570 027", pw / 2, footerY + 4, { align: "center" });
 

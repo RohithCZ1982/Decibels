@@ -12,18 +12,17 @@ const SelectLabelContext = React.createContext<{
 }>({ register: () => {}, getLabel: () => undefined });
 
 function Select({ children, ...props }: SelectPrimitive.Root.Props<string>) {
-  const mapRef = React.useRef(new Map<string, string>());
-  const [, rerender] = React.useState(0);
+  const [labelMap, setLabelMap] = React.useState<Record<string, string>>({});
 
   const ctx = React.useMemo(() => ({
     register: (value: string, label: string) => {
-      if (mapRef.current.get(value) !== label) {
-        mapRef.current.set(value, label);
-        rerender((c) => c + 1);
-      }
+      setLabelMap((prev) => {
+        if (prev[value] === label) return prev;
+        return { ...prev, [value]: label };
+      });
     },
-    getLabel: (value: string) => mapRef.current.get(value),
-  }), [rerender]);
+    getLabel: (value: string) => labelMap[value],
+  }), [labelMap]);
 
   return (
     <SelectLabelContext.Provider value={ctx}>

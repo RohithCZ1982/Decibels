@@ -94,6 +94,7 @@ export default function NewQuotationPage() {
         template.items.map((ti) => ({
           key: nextLineItemKey(),
           name: ti.item.name,
+          description: ti.item.description || "",
           hsnCode: ti.item.hsnCode || "",
           quantity: ti.quantity,
           unit: ti.item.unit || "No",
@@ -163,6 +164,7 @@ export default function NewQuotationPage() {
         enableRoundOff,
         items: validItems.map((li) => ({
           name: li.name,
+          description: li.description || null,
           hsnCode: li.hsnCode || null,
           quantity: li.quantity,
           unit: li.unit || "No",

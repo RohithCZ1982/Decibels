@@ -8,6 +8,7 @@ import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 export interface LineItem {
   key: string;
   name: string;
+  description: string;
   hsnCode: string;
   quantity: number;
   unit: string;
@@ -21,6 +22,7 @@ export interface CatalogItem {
   id: string;
   code: string;
   name: string;
+  description?: string | null;
   hsnCode: string | null;
   gstRate: number;
   unitPrice: number;
@@ -36,7 +38,7 @@ export function nextLineItemKey() {
 }
 
 export function emptyLineItem(): LineItem {
-  return { key: nextLineItemKey(), name: "", hsnCode: "", quantity: 1, unit: "No", unitPrice: 0, gstRate: 18, itemId: null, notes: "" };
+  return { key: nextLineItemKey(), name: "", description: "", hsnCode: "", quantity: 1, unit: "No", unitPrice: 0, gstRate: 18, itemId: null, notes: "" };
 }
 
 function formatINR(n: number) {
@@ -82,6 +84,7 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
     updated[idx] = {
       ...updated[idx],
       name: item.name,
+      description: item.description || "",
       hsnCode: item.hsnCode || "",
       unitPrice: item.unitPrice,
       gstRate: item.gstRate,
@@ -94,7 +97,7 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
   };
 
   const getFilteredItems = (searchVal: string) => {
-    if (searchVal.length < 3) return [];
+    if (searchVal.length < 1) return [];
     const lower = searchVal.toLowerCase();
     return allItems.filter(
       (item) => item.name.toLowerCase().includes(lower) || item.code.toLowerCase().includes(lower)
@@ -123,7 +126,7 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
           <div className="grid grid-cols-[1fr_70px_110px_70px_110px_36px_40px] gap-2 items-start">
             <div className="relative">
               <Input
-                placeholder="Type 3+ chars to search..."
+                placeholder="Type to search items..."
                 value={activeAutocomplete === idx ? (itemSearchValues[idx] ?? li.name) : li.name}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -131,6 +134,7 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
                   setActiveAutocomplete(idx);
                   updateLineItem(idx, "name", val);
                   updateLineItem(idx, "itemId", null);
+                  updateLineItem(idx, "description", "");
                   updateLineItem(idx, "hsnCode", "");
                 }}
                 onFocus={() => setActiveAutocomplete(idx)}

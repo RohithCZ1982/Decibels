@@ -195,9 +195,9 @@ export default function EmployeesPage() {
     if (res.ok) { toast.success("Deleted"); loadDeductions(); loadSalaries(); }
   };
 
-  const printReceipt = (sal: Salary) => {
+  const printReceipt = async (sal: Salary) => {
     const totalDeductions = sal.deductions.reduce((s, d) => s + d.amount, 0);
-    generateSalaryReceiptPDF({
+    await generateSalaryReceiptPDF({
       employeeName: sal.employee.name,
       employeeRole: sal.employee.role || "",
       month: sal.month,
@@ -209,8 +209,8 @@ export default function EmployeesPage() {
     });
   };
 
-  const printDeductionReceipt = (ded: SalaryDeduction) => {
-    generateDeductionReceiptPDF({
+  const printDeductionReceipt = async (ded: SalaryDeduction) => {
+    await generateDeductionReceiptPDF({
       employeeName: ded.employee.name,
       employeeRole: ded.employee.role || "",
       reason: ded.reason,

@@ -2,6 +2,7 @@
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { registerPoppins } from "./pdf-fonts";
 
 interface QuotationData {
   quotationNumber: string;
@@ -29,6 +30,7 @@ interface QuotationData {
   };
   items: Array<{
     name: string;
+    description?: string | null;
     quantity: number;
     unit?: string;
     unitPrice: number;
@@ -78,20 +80,24 @@ function loadImage(src: string): Promise<string> {
   });
 }
 
-const RED: [number, number, number] = [180, 40, 40];
+const PINK: [number, number, number] = [200, 50, 60];
 const BLACK: [number, number, number] = [30, 30, 30];
-const GOLD: [number, number, number] = [180, 150, 50];
 
 export async function generateQuotationPDF(quotation: QuotationData) {
   const doc = new jsPDF("p", "mm", "a4");
 
-  const logoData = await loadImage("/logo.png");
+  const [logoData, badgeData] = await Promise.all([
+    loadImage("/logo.png"),
+    loadImage("/25years.png"),
+  ]);
 
-  drawQuotationPage(doc, quotation, logoData);
+  await registerPoppins(doc);
+
+  drawQuotationPage(doc, quotation, logoData, badgeData);
 
   if (quotation.payments && quotation.payments.length > 0) {
     doc.addPage();
-    drawPaymentsPage(doc, quotation);
+    drawPaymentsPage(doc, quotation, logoData, badgeData);
   }
 
   doc.addPage();
@@ -100,58 +106,54 @@ export async function generateQuotationPDF(quotation: QuotationData) {
   window.open(doc.output("bloburl"), "_blank");
 }
 
+function drawHeader(doc: jsPDF, logoData: string, badgeData: string) {
+  const ml = 10;
+  const re = 200;
+
+  if (logoData) {
+    doc.addImage(logoData, "PNG", ml, 6, 55, 10);
+  } else {
+    doc.setFontSize(18);
+    doc.setFont("Poppins", "bolditalic");
+    doc.setTextColor(...PINK);
+    doc.text("Decibels", ml, 12);
+    doc.setFontSize(6);
+    doc.setFont("Poppins", "normal");
+    doc.setTextColor(80, 80, 80);
+    doc.text("a u d i o   s y s t e m s", ml, 17);
+  }
+
+  doc.setFontSize(7);
+  doc.setFont("Poppins", "normal");
+  doc.setTextColor(60, 60, 60);
+  doc.text("#277/A, Hebbal Industrial Area, Mysuru – 570 027,", ml, 20);
+  doc.text("Karnataka, INDIA. Ph : 08212331331 Mobile: 9972449311", ml, 23.5);
+  doc.text("mani@decibelsaudio.com website: www.decibelsaudio.com", ml, 27);
+
+  if (badgeData) {
+    doc.addImage(badgeData, "PNG", re - 22, 4, 22, 22);
+  }
+}
+
 function drawQuotationPage(
   doc: jsPDF,
   q: QuotationData,
-  logoData: string
+  logoData: string,
+  badgeData: string
 ) {
   const pw = 210;
   const ml = 10;
   const re = pw - ml;
   const cw = pw - ml * 2;
 
-  // --- HEADER ---
-  if (logoData) {
-    doc.addImage(logoData, "PNG", ml, 6, 55, 8);
-  } else {
-    doc.setFontSize(18);
-    doc.setFont("helvetica", "bolditalic");
-    doc.setTextColor(...RED);
-    doc.text("Decibels", ml, 12);
-    doc.setFontSize(6);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(80, 80, 80);
-    doc.text("a u d i o   s y s t e m s", ml, 17);
-  }
-
-  doc.setFontSize(6);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(60, 60, 60);
-  doc.text("#277/A, Hebbal Industrial Area, Mysuru – 570 027,", ml, 18);
-  doc.text("Karnataka, INDIA. Ph : 08212331331 Mobile: 9972449311", ml, 21.5);
-  doc.text("mani@decibelsaudio.com website: www.decibelsaudio.com", ml, 25);
-
-  // 25 Years badge
-  const bx = re - 12;
-  const by = 12;
-  doc.setDrawColor(...GOLD);
-  doc.setLineWidth(1);
-  doc.circle(bx, by, 9);
-  doc.setLineWidth(0.4);
-  doc.circle(bx, by, 7.5);
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...GOLD);
-  doc.text("25", bx, by + 1, { align: "center" });
-  doc.setFontSize(4);
-  doc.text("YEARS", bx, by + 4.5, { align: "center" });
+  drawHeader(doc, logoData, badgeData);
 
   // "Statement of Quotation" or "Tax Invoice"
   const INVOICE_STATUSES = ["APPROVED", "IN_PRODUCTION", "COMPLETED", "CLOSED"];
   const isInvoice = q.status && INVOICE_STATUSES.includes(q.status);
   doc.setFontSize(16);
-  doc.setFont("times", "bolditalic");
-  doc.setTextColor(...RED);
+  doc.setFont("Poppins", "bold");
+  doc.setTextColor(...PINK);
   doc.text(isInvoice ? "Tax Invoice" : "Statement of Quotation", re, 36, { align: "right" });
 
   // --- CUSTOMER DETAILS BOX ---
@@ -168,17 +170,17 @@ function drawQuotationPage(
   doc.setFillColor(100, 130, 85);
   doc.rect(ml, custY, 32, 7, "F");
   doc.setFontSize(7);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.setTextColor(255, 255, 255);
   doc.text("Customer Details", ml + 1.5, custY + 5);
 
   // JOB
   const jobX = pw / 2 + 5;
   doc.setFontSize(7.5);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...RED);
+  doc.setFont("Poppins", "bold");
+  doc.setTextColor(...PINK);
   doc.text("JOB :", jobX, custY + 5);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("Poppins", "normal");
   doc.setTextColor(...BLACK);
   doc.setFontSize(6.5);
   const jobLines = doc.splitTextToSize(
@@ -189,34 +191,34 @@ function drawQuotationPage(
 
   // Customer name & address
   doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.setTextColor(...BLACK);
   doc.text(q.customer.name, ml + 2, custY + 15);
 
   doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("Poppins", "normal");
   doc.text(q.customer.address || "", ml + 2, custY + 21);
 
   // DATE & Ref
   const dX = re - 55;
   doc.setFontSize(8);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.setTextColor(...BLACK);
   doc.text("DATE:", dX, custY + 20);
-  doc.setTextColor(...RED);
+  doc.setTextColor(...PINK);
   doc.text(formatDate(q.billDate || q.createdAt), dX + 18, custY + 20);
 
   doc.setTextColor(...BLACK);
   doc.text("Ref. #", dX, custY + 26);
-  doc.setTextColor(...RED);
+  doc.setTextColor(...PINK);
   doc.text(q.quotationNumber, dX + 18, custY + 26);
 
-  // --- RED TITLE BAR ---
+  // --- PINK TITLE BAR ---
   const barY = custY + custH + 4;
-  doc.setFillColor(...RED);
+  doc.setFillColor(...PINK);
   doc.rect(ml, barY, cw, 8, "F");
   doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.setTextColor(255, 255, 255);
   const titleText = q.title
     ? `Decibels Home Theater ${q.title}`
@@ -245,10 +247,13 @@ function drawQuotationPage(
   });
 
   const body: string[][] = [];
-  const rowTypes: ("item" | "desc" | "subtotal" | "total")[] = [];
+  const rowTypes: ("catHeader" | "item" | "desc" | "subtotal" | "total")[] = [];
   let sl = 1;
 
   for (const group of groups) {
+    body.push(["", group.name, "", "", "", "", ""]);
+    rowTypes.push("catHeader");
+
     for (const item of group.items) {
       body.push([
         sl.toString(),
@@ -261,7 +266,7 @@ function drawQuotationPage(
       ]);
       rowTypes.push("item");
 
-      const desc = item.item?.description;
+      const desc = item.description || item.item?.description || item.notes;
       if (desc) {
         body.push(["", desc, "", "", "", "", ""]);
         rowTypes.push("desc");
@@ -309,16 +314,17 @@ function drawQuotationPage(
     body,
     theme: "plain",
     styles: {
-      fontSize: 8,
+      font: "Poppins",
+      fontSize: 9,
       cellPadding: { top: 2.5, bottom: 2.5, left: 1.5, right: 1.5 },
       textColor: BLACK,
       lineWidth: 0,
     },
     headStyles: {
       fillColor: [255, 255, 255],
-      textColor: RED,
+      textColor: PINK,
       fontStyle: "bold",
-      fontSize: 8,
+      fontSize: 9,
     },
     columnStyles: {
       0: { cellWidth: 10, halign: "center" },
@@ -333,26 +339,42 @@ function drawQuotationPage(
     didParseCell: (data) => {
       if (data.section !== "body") return;
       const rt = rowTypes[data.row.index];
+      if (rt === "catHeader") {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fontSize = 9;
+        data.cell.styles.textColor = PINK;
+        data.cell.styles.cellPadding = { top: 4, bottom: 2, left: 1.5, right: 1.5 };
+      }
       if (rt === "desc") {
         data.cell.styles.textColor = [100, 100, 100] as [number, number, number];
         data.cell.styles.fontStyle = "italic";
-        data.cell.styles.fontSize = 6.5;
+        data.cell.styles.fontSize = 7;
         data.cell.styles.cellPadding = { top: 0, bottom: 2, left: 1.5, right: 1.5 };
       }
       if (rt === "subtotal") {
-        data.cell.styles.textColor = RED;
+        data.cell.styles.textColor = PINK;
         data.cell.styles.fontStyle = "bold";
-        data.cell.styles.fontSize = 9;
+        data.cell.styles.fontSize = 10;
       }
       if (rt === "total") {
         data.cell.styles.fontStyle = "bold";
-        data.cell.styles.fontSize = 10;
+        data.cell.styles.fontSize = 11;
       }
     },
     didDrawCell: (data) => {
       if (data.section === "head" && data.column.index === 6) {
-        doc.setDrawColor(...RED);
+        doc.setDrawColor(...PINK);
         doc.setLineWidth(0.5);
+        const ly = data.cell.y + data.cell.height;
+        doc.line(ml, ly, re, ly);
+      }
+      if (
+        data.section === "body" &&
+        rowTypes[data.row.index] === "catHeader" &&
+        data.column.index === 0
+      ) {
+        doc.setDrawColor(...PINK);
+        doc.setLineWidth(0.3);
         const ly = data.cell.y + data.cell.height;
         doc.line(ml, ly, re, ly);
       }
@@ -373,15 +395,15 @@ function drawQuotationPage(
   let y = (doc as any).lastAutoTable.finalY + 6;
 
   if (q.notes) {
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "bolditalic");
-    doc.setTextColor(...RED);
+    doc.setFontSize(9);
+    doc.setFont("Poppins", "bold");
+    doc.setTextColor(...PINK);
     doc.text("Note :", ml, y);
     y += 4;
 
-    doc.setFont("helvetica", "italic");
+    doc.setFont("Poppins", "italic");
     doc.setTextColor(...BLACK);
-    doc.setFontSize(7);
+    doc.setFontSize(8);
     for (const line of q.notes.split("\n")) {
       if (!line.trim()) continue;
       const wrapped = doc.splitTextToSize(line.trim(), cw - 5);
@@ -393,7 +415,7 @@ function drawQuotationPage(
   y += 4;
 
   doc.setFontSize(8);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.setTextColor(...BLACK);
   const ref = "Terms And Conditions are enclosed herewith Attachment 1.";
   doc.text(ref, ml, y);
@@ -404,58 +426,57 @@ function drawQuotationPage(
 
   y += 5;
   doc.setFontSize(7);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("Poppins", "normal");
   doc.text(q.includeGst !== false ? "GST included as detailed above." : "GST Not Applicable.", ml, y);
 
   doc.setFontSize(9);
-  doc.setFont("helvetica", "italic");
+  doc.setFont("Poppins", "italic");
   doc.setTextColor(80, 80, 80);
   doc.text("Authorized by", re - 40, y + 8);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.setFontSize(10);
   doc.setTextColor(...BLACK);
   doc.text(q.createdBy?.name || "N Manikantan Iyer", re - 40, y + 16);
 }
 
-function drawPaymentsPage(doc: jsPDF, q: QuotationData) {
+function drawPaymentsPage(doc: jsPDF, q: QuotationData, logoData: string, badgeData: string) {
   const ml = 10;
   const re = 200;
 
-  // Header
+  drawHeader(doc, logoData, badgeData);
+
   doc.setFontSize(16);
-  doc.setFont("times", "bolditalic");
-  doc.setTextColor(...RED);
-  doc.text("Payments", re, 20, { align: "right" });
+  doc.setFont("Poppins", "bold");
+  doc.setTextColor(...PINK);
+  doc.text("Payments", re, 36, { align: "right" });
+
+  doc.setDrawColor(...PINK);
+  doc.setLineWidth(0.5);
+  doc.line(ml, 40, re, 40);
 
   doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("Poppins", "normal");
   doc.setTextColor(60, 60, 60);
-  doc.text(`Ref: ${q.quotationNumber}`, ml, 20);
-  doc.text(`Customer: ${q.customer.name}`, ml, 25);
-
-  doc.setDrawColor(...RED);
-  doc.setLineWidth(0.5);
-  doc.line(ml, 30, re, 30);
+  doc.text(`Ref: ${q.quotationNumber}  |  Customer: ${q.customer.name}`, ml, 45);
 
   const payments = q.payments || [];
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
   const balance = q.grandTotal - totalPaid;
 
   // Summary bar
-  const sumY = 34;
+  const sumY = 49;
   doc.setFillColor(248, 248, 238);
   doc.rect(ml, sumY, re - ml, 10, "F");
   doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.setTextColor(...BLACK);
   doc.text(`Grand Total: ${formatINR(q.grandTotal)}`, ml + 4, sumY + 7);
   doc.text(`Total Paid: ${formatINR(totalPaid)}`, ml + 70, sumY + 7);
-  doc.setTextColor(balance > 0 ? RED[0] : 0, balance > 0 ? RED[1] : 120, balance > 0 ? RED[2] : 0);
+  doc.setTextColor(balance > 0 ? PINK[0] : 0, balance > 0 ? PINK[1] : 120, balance > 0 ? PINK[2] : 0);
   doc.text(`Balance: ${formatINR(balance)}`, ml + 140, sumY + 7);
 
-  // Payments table
   autoTable(doc, {
-    startY: sumY + 16,
+    startY: sumY + 14,
     margin: { left: ml, right: ml },
     head: [["#", "Date", "Amount", "Mode", "Transaction ID", "Notes", "Recorded By"]],
     body: payments.map((p, i) => [
@@ -469,14 +490,17 @@ function drawPaymentsPage(doc: jsPDF, q: QuotationData) {
     ]),
     foot: [["", "", formatINR(totalPaid), "", "", "", ""]],
     theme: "grid",
+    styles: {
+      font: "Poppins",
+    },
     headStyles: {
-      fillColor: [RED[0], RED[1], RED[2]],
+      fillColor: [PINK[0], PINK[1], PINK[2]],
       textColor: [255, 255, 255],
       fontStyle: "bold",
-      fontSize: 8,
+      fontSize: 9,
     },
     bodyStyles: {
-      fontSize: 8,
+      fontSize: 9,
       textColor: BLACK,
       cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
     },
@@ -484,7 +508,7 @@ function drawPaymentsPage(doc: jsPDF, q: QuotationData) {
       fillColor: [248, 248, 238],
       textColor: BLACK,
       fontStyle: "bold",
-      fontSize: 9,
+      fontSize: 10,
     },
     columnStyles: {
       0: { cellWidth: 10, halign: "center" },
@@ -547,12 +571,12 @@ function drawTermsPage(doc: jsPDF) {
   let y = 20;
 
   doc.setTextColor(30, 30, 30);
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setFont("Poppins", "bold");
   doc.text("Terms and Conditions:", ml, y);
   y += 8;
 
-  doc.setFontSize(8);
+  doc.setFontSize(9);
 
   const terms: {
     num: string;
@@ -580,7 +604,7 @@ function drawTermsPage(doc: jsPDF) {
     },
     {
       num: "4.",
-      text: "Work site should be ready to start work at the time of confirmation of work and free from other contractor’s interference.",
+      text: "Work site should be ready to start work at the time of confirmation of work and free from other contractor's interference.",
     },
     {
       num: "5.",
@@ -613,7 +637,7 @@ function drawTermsPage(doc: jsPDF) {
     {
       num: "11.",
       label: "Force Majeure",
-      text: "Seller shall have no liability or obligation to Buyer of any kind, including, but not limited to, any obligation to deliver Goods as a result of causes, conduct or occurrences beyond Seller’s reasonable control, including, but not limited to, commercial impracticability, fire, flood, act of war, terrorism, civil disorder or disobedience, act of public enemies, problems associated with transportation (including car or truck shortages), acts or failure to act of any state, federal or foreign governmental or regulatory authorities, labor disputes, strikes, or failure of suppliers to make timely deliveries of materials, goods or services to Seller.",
+      text: "Seller shall have no liability or obligation to Buyer of any kind, including, but not limited to, any obligation to deliver Goods as a result of causes, conduct or occurrences beyond Seller's reasonable control, including, but not limited to, commercial impracticability, fire, flood, act of war, terrorism, civil disorder or disobedience, act of public enemies, problems associated with transportation (including car or truck shortages), acts or failure to act of any state, federal or foreign governmental or regulatory authorities, labor disputes, strikes, or failure of suppliers to make timely deliveries of materials, goods or services to Seller.",
     },
     {
       num: "12.",
@@ -628,7 +652,7 @@ function drawTermsPage(doc: jsPDF) {
     {
       num: "14.",
       label: "Interpretation",
-      text: "All rights granted to Seller herein shall be in addition to and not in lieu of Seller’s rights by operation of the law. No modification of this Agreement or any other provision of the contract shall be valid unless in writing and signed by Seller.",
+      text: "All rights granted to Seller herein shall be in addition to and not in lieu of Seller's rights by operation of the law. No modification of this Agreement or any other provision of the contract shall be valid unless in writing and signed by Seller.",
     },
   ];
 
@@ -638,24 +662,24 @@ function drawTermsPage(doc: jsPDF) {
       y = 20;
     }
 
-    doc.setFont("helvetica", "italic");
+    doc.setFont("Poppins", "italic");
     doc.setTextColor(30, 30, 30);
     doc.text(term.num, ml, y);
 
     if (term.label) {
-      doc.setFont("helvetica", "bolditalic");
+      doc.setFont("Poppins", "bolditalic");
       const labelStr = term.label + ": ";
       doc.text(labelStr, textX, y);
 
       if (term.text) {
         const labelW = doc.getTextWidth(labelStr);
-        doc.setFont("helvetica", "italic");
+        doc.setFont("Poppins", "italic");
         y = renderWrappedAfterLabel(doc, term.text, textX, y, textW, labelW, lh);
       } else {
         y += lh;
       }
     } else if (term.text) {
-      doc.setFont("helvetica", "italic");
+      doc.setFont("Poppins", "italic");
       const lines = doc.splitTextToSize(term.text, textW);
       for (const l of lines) {
         if (y > 285) {
@@ -673,7 +697,7 @@ function drawTermsPage(doc: jsPDF) {
           doc.addPage();
           y = 20;
         }
-        doc.setFont("helvetica", "italic");
+        doc.setFont("Poppins", "italic");
         doc.text("•", textX + 2, y);
         const bLines = doc.splitTextToSize(bullet, textW - 8);
         for (const bl of bLines) {

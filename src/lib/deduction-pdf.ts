@@ -1,6 +1,7 @@
 "use client";
 
 import jsPDF from "jspdf";
+import { registerPoppins } from "./pdf-fonts";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -41,8 +42,9 @@ const RED: [number, number, number] = [180, 40, 40];
 const GRAY: [number, number, number] = [120, 120, 120];
 const LIGHT_GRAY: [number, number, number] = [200, 200, 200];
 
-export function generateDeductionReceiptPDF(data: DeductionReceiptData) {
+export async function generateDeductionReceiptPDF(data: DeductionReceiptData) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a5" });
+  await registerPoppins(doc);
   const pw = 148;
   const ml = 12;
   const mr = pw - ml;
@@ -65,7 +67,7 @@ export function generateDeductionReceiptPDF(data: DeductionReceiptData) {
 
   // --- Title ---
   doc.setFontSize(24);
-  doc.setFont("times", "bold");
+  doc.setFont("Poppins", "bold");
   doc.setTextColor(...NAVY);
   doc.text(data.reason.toUpperCase(), cx, 25, { align: "center" });
 
@@ -82,7 +84,7 @@ export function generateDeductionReceiptPDF(data: DeductionReceiptData) {
   doc.triangle(ml, y, ml + 26, y, ml + 23, y + 7, "F");
   doc.rect(ml, y, 23, 7, "F");
   doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.setTextColor(255, 255, 255);
   doc.text("BILL TO:", ml + 2, y + 5);
 
@@ -95,9 +97,9 @@ export function generateDeductionReceiptPDF(data: DeductionReceiptData) {
 
   doc.setTextColor(...NAVY);
   doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.text("Date :", boxX + 5, y + 8);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("Poppins", "normal");
   doc.text(dateStr, boxX + 18, y + 8);
 
   // --- Name field ---
@@ -109,9 +111,9 @@ export function generateDeductionReceiptPDF(data: DeductionReceiptData) {
   const drawField = (label: string, value: string) => {
     doc.setTextColor(...NAVY);
     doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
+    doc.setFont("Poppins", "bold");
     doc.text(label, fieldLabelX, y);
-    doc.setFont("helvetica", "bold");
+    doc.setFont("Poppins", "bold");
     doc.setTextColor(30, 30, 30);
     doc.text(value, fieldValX, y);
     doc.setDrawColor(...LIGHT_GRAY);
@@ -141,10 +143,10 @@ export function generateDeductionReceiptPDF(data: DeductionReceiptData) {
 
   doc.setTextColor(...NAVY);
   doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.text("AMOUNT IN WORDS :", ml + 4, y + 10);
 
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.setTextColor(30, 30, 30);
   doc.setFontSize(9);
   doc.text(wordLines, ml + 46, y + 10);
@@ -157,14 +159,14 @@ export function generateDeductionReceiptPDF(data: DeductionReceiptData) {
 
   doc.setTextColor(...NAVY);
   doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.text("AMOUNT IN FIGURE :", ml + 4, y + 10);
 
   doc.setDrawColor(...NAVY);
   doc.setLineWidth(0.4);
   doc.roundedRect(ml + 44, y + 3, 42, 11, 1, 1, "S");
   doc.setFontSize(12);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.setTextColor(...NAVY);
   doc.text(formatINR(data.amount), ml + 46, y + 10.5);
 
@@ -175,17 +177,17 @@ export function generateDeductionReceiptPDF(data: DeductionReceiptData) {
   doc.line(mr - 42, y, mr, y);
   doc.setTextColor(80, 80, 80);
   doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Poppins", "bold");
   doc.text("SIGNATURE", mr - 21, y + 6, { align: "center" });
 
   // --- Company footer ---
   const footerY = 196;
   doc.setFontSize(13);
-  doc.setFont("helvetica", "bolditalic");
+  doc.setFont("Poppins", "bolditalic");
   doc.setTextColor(...RED);
   doc.text("Decibels", cx, footerY - 4, { align: "center" });
   doc.setFontSize(6);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("Poppins", "normal");
   doc.setTextColor(...GRAY);
   doc.text("a u d i o   s y s t e m s", cx, footerY, { align: "center" });
   doc.setFontSize(6);

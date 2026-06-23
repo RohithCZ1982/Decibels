@@ -96,8 +96,9 @@ export async function POST(request: NextRequest) {
         terms: terms || "1. Prices are valid for 30 days from the date of quotation.\n2. 50% advance payment required to confirm the order.\n3. Balance payment due before installation.\n4. Installation timeline: 4-6 weeks from order confirmation.\n5. 1-year warranty on all equipment and installation.",
         validUntil: validUntil ? new Date(validUntil) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         items: {
-          create: items.map((item: { name: string; hsnCode?: string; quantity: number; unit?: string; unitPrice: number; gstRate?: number; itemId?: string; notes?: string }, idx: number) => ({
+          create: items.map((item: { name: string; description?: string; hsnCode?: string; quantity: number; unit?: string; unitPrice: number; gstRate?: number; itemId?: string; notes?: string }, idx: number) => ({
             name: item.name,
+            description: item.description || null,
             hsnCode: item.hsnCode || null,
             quantity: item.quantity,
             unit: item.unit || "No",
