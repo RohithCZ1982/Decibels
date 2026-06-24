@@ -15,6 +15,7 @@ interface SalaryReceiptData {
   deductions: Array<{ reason: string; amount: number }>;
   totalDeductions: number;
   netPay: number;
+  advanceBalance?: number;
 }
 
 function formatINR(n: number) {
@@ -243,16 +244,26 @@ export async function generateSalaryReceiptPDF(data: SalaryReceiptData) {
   doc.text("NET PAY", ml + 4, y + 7);
   doc.text(formatINR(data.netPay), re - 4, y + 7, { align: "right" });
 
+  // --- ADVANCE BALANCE ---
+  if (data.advanceBalance && data.advanceBalance > 0) {
+    y += 6;
+    doc.setFillColor(255, 248, 235);
+    doc.setDrawColor(200, 170, 80);
+    doc.setLineWidth(0.3);
+    doc.rect(ml, y, cw, 8, "FD");
+    doc.setFontSize(9);
+    doc.setFont("Poppins", "bold");
+    doc.setTextColor(160, 120, 40);
+    doc.text("Advance Salary Balance (incl. interest)", ml + 4, y + 5.5);
+    doc.text(formatINR(Math.round(data.advanceBalance)), re - 4, y + 5.5, { align: "right" });
+  }
+
   // --- SIGNATURE ---
   y += 30;
   doc.setFontSize(9);
   doc.setFont("Poppins", "italic");
   doc.setTextColor(80, 80, 80);
   doc.text("Authorized by", re - 40, y);
-  doc.setFont("Poppins", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...BLACK);
-  doc.text("N Manikantan Iyer", re - 40, y + 8);
 
   // --- FOOTER ---
   const footerY = doc.internal.pageSize.getHeight() - 15;

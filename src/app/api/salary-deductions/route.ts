@@ -43,17 +43,6 @@ export async function POST(request: NextRequest) {
     const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
     if (!employee) return errorResponse("Employee not found", 404);
 
-    if (reason === "Advance" && employee.advanceLimit > 0) {
-      const existingAdvances = await prisma.salaryDeduction.aggregate({
-        _sum: { amount: true },
-        where: { employeeId, reason: "Advance", salaryId: salaryId || undefined },
-      });
-      const totalAdvances = (existingAdvances._sum.amount || 0) + parsedAmount;
-      if (totalAdvances > employee.advanceLimit) {
-        return errorResponse(`Advance limit exceeded. Limit: ${employee.advanceLimit}, Already taken: ${existingAdvances._sum.amount || 0}`);
-      }
-    }
-
     if (salaryId) {
       const salary = await prisma.salary.findUnique({
         where: { id: salaryId },

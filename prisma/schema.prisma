@@ -288,6 +288,7 @@ model Employee {
 
   salaries         Salary[]
   salaryDeductions SalaryDeduction[]
+  salaryAdvances   SalaryAdvance[]
 
   @@index([name])
 }
@@ -328,4 +329,19 @@ model SalaryDeduction {
 
   @@index([employeeId])
   @@index([salaryId])
+}
+
+model SalaryAdvance {
+  id           String   @id @default(cuid())
+  amount       Float
+  interestRate Float    @default(2)
+  date         DateTime @default(now())
+  notes        String?
+
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId   String
+
+  createdAt    DateTime @default(now())
+
+  @@index([employeeId])
 }

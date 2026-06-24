@@ -12,7 +12,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Edit2, Trash2, Users, Printer, IndianRupee } from "lucide-react";
+import { Plus, Edit2, Trash2, Users, Printer, IndianRupee, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { generateSalaryReceiptPDF } from "@/lib/salary-pdf";
 import { generateDeductionReceiptPDF } from "@/lib/deduction-pdf";
@@ -49,11 +49,25 @@ interface SalaryDeduction {
   salary: { month: number; year: number; amount: number } | null;
 }
 
+interface SalaryAdvance {
+  id: string;
+  amount: number;
+  interestRate: number;
+  date: string;
+  notes: string | null;
+  employee: { name: string; role: string | null };
+}
+
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DEDUCTION_REASONS = ["Advance", "Salary"];
 
 function formatINR(n: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+}
+
+function calcInterest(principal: number, rate: number, fromDate: string): number {
+  const days = Math.max(0, Math.floor((Date.now() - new Date(fromDate).getTime()) / (1000 * 60 * 60 * 24)));
+  return principal * (rate / 100) * (days / 365);
 }
 
 const now = new Date();
@@ -63,14 +77,16 @@ const currentYear = now.getFullYear();
 const emptyEmployee = { name: "", mobile: "", email: "", role: "", baseSalary: "", advanceLimit: "", joinDate: new Date().toISOString().split("T")[0] };
 const emptySalary = { employeeId: "", month: currentMonth.toString(), year: currentYear.toString(), amount: "", notes: "" };
 const emptyDeduction = { employeeId: "", salaryId: "", amount: "", reason: "Advance", date: new Date().toISOString().split("T")[0], notes: "" };
+const emptyAdvance = { employeeId: "", amount: "", interestRate: "2", date: new Date().toISOString().split("T")[0], notes: "" };
 
-type TabKey = "overview" | "employees" | "salary" | "deductions";
+type TabKey = "overview" | "employees" | "salary" | "deductions" | "advances";
 
 export default function EmployeesPage() {
   const [tab, setTab] = useState<TabKey>("overview");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [salaries, setSalaries] = useState<Salary[]>([]);
   const [deductions, setDeductions] = useState<SalaryDeduction[]>([]);
+  const [advances, setAdvances] = useState<SalaryAdvance[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [filterMonth, setFilterMonth] = useState(currentMonth.toString());
@@ -89,6 +105,10 @@ export default function EmployeesPage() {
   const [dedForm, setDedForm] = useState(emptyDeduction);
   const [dedSaving, setDedSaving] = useState(false);
 
+  const [advDialogOpen, setAdvDialogOpen] = useState(false);
+  const [advForm, setAdvForm] = useState(emptyAdvance);
+  const [advSaving, setAdvSaving] = useState(false);
+
   const loadEmployees = useCallback(async () => {
     const res = await fetch("/api/employees");
     if (res.ok) setEmployees(await res.json());
@@ -106,10 +126,30 @@ export default function EmployeesPage() {
     if (res.ok) setDeductions(await res.json());
   }, [filterMonth, filterYear]);
 
+  const loadAdvances = useCallback(async () => {
+    const res = await fetch("/api/salary-advances");
+    if (res.ok) setAdvances(await res.json());
+  }, []);
+
   useEffect(() => {
     setLoading(true);
-    Promise.all([loadEmployees(), loadSalaries(), loadDeductions()]).finally(() => setLoading(false));
-  }, [loadEmployees, loadSalaries, loadDeductions]);
+    Promise.all([loadEmployees(), loadSalaries(), loadDeductions(), loadAdvances()]).finally(() => setLoading(false));
+  }, [loadEmployees, loadSalaries, loadDeductions, loadAdvances]);
+
+  // Advance balance calculation per employee
+  function getAdvanceInfo(empId: string) {
+    const empAdvances = advances.filter((a) => a.employee.name === employees.find((e) => e.id === empId)?.name);
+    const totalAdvanced = empAdvances.reduce((s, a) => s + a.amount, 0);
+    const totalInterest = empAdvances.reduce((s, a) => s + calcInterest(a.amount, a.interestRate, a.date), 0);
+    // "Salary" reason deductions reduce the advance balance
+    const empName = employees.find((e) => e.id === empId)?.name;
+    const salaryDeductions = empName
+      ? deductions.filter((d) => d.employee.name === empName && d.reason === "Salary").reduce((s, d) => s + d.amount, 0)
+      : 0;
+    const principal = Math.max(0, totalAdvanced - salaryDeductions);
+    const interest = totalAdvanced > 0 ? Math.round(totalInterest * (principal / totalAdvanced)) : 0;
+    return { totalAdvanced, totalRepaid: salaryDeductions, principal, interest, outstanding: principal + interest };
+  }
 
   // Employee CRUD
   const openNewEmp = () => { setEditingEmp(null); setEmpForm(emptyEmployee); setEmpDialogOpen(true); };
@@ -160,19 +200,19 @@ export default function EmployeesPage() {
 
     const emp = employees.find((e) => e.id === dedForm.employeeId);
 
-    // Client-side advance limit check
-    if (dedForm.reason === "Advance" && emp && emp.advanceLimit > 0) {
-      const existingAdvances = deductions
-        .filter((d) => d.employee.name === emp.name && d.reason === "Advance")
-        .reduce((s, d) => s + d.amount, 0);
-      if (existingAdvances + amt > emp.advanceLimit) {
-        toast.error(`Advance limit exceeded. Limit: ${formatINR(emp.advanceLimit)}, Already taken: ${formatINR(existingAdvances)}`);
+    if (dedForm.reason === "Advance" && emp) {
+      const advInfo = getAdvanceInfo(emp.id);
+      if (advInfo.totalAdvanced <= 0) {
+        toast.error("No advance taken to deduct from");
+        return;
+      }
+      if (amt > advInfo.principal) {
+        toast.error(`Amount exceeds advance balance. Outstanding principal: ${formatINR(advInfo.principal)}`);
         return;
       }
     }
 
-    // Client-side salary balance check
-    if (dedForm.salaryId) {
+    if (dedForm.reason === "Salary" && dedForm.salaryId) {
       const sal = salaries.find((s) => s.id === dedForm.salaryId);
       if (sal) {
         const existingDeds = sal.deductions.reduce((s, d) => s + d.amount, 0);
@@ -195,8 +235,28 @@ export default function EmployeesPage() {
     if (res.ok) { toast.success("Deleted"); loadDeductions(); loadSalaries(); }
   };
 
+  // Advance CRUD
+  const openNewAdv = () => { setAdvForm({ ...emptyAdvance }); setAdvDialogOpen(true); };
+  const saveAdv = async () => {
+    if (!advForm.employeeId || !advForm.amount) { toast.error("Employee and amount are required"); return; }
+    const amt = parseFloat(advForm.amount);
+    if (amt <= 0) { toast.error("Amount must be greater than 0"); return; }
+    setAdvSaving(true);
+    const res = await fetch("/api/salary-advances", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(advForm) });
+    if (res.ok) { toast.success("Advance added"); setAdvDialogOpen(false); loadAdvances(); }
+    else { const d = await res.json(); toast.error(d.error || "Failed"); }
+    setAdvSaving(false);
+  };
+  const deleteAdv = async (a: SalaryAdvance) => {
+    if (!confirm("Delete this advance record?")) return;
+    const res = await fetch(`/api/salary-advances/${a.id}`, { method: "DELETE" });
+    if (res.ok) { toast.success("Deleted"); loadAdvances(); }
+  };
+
   const printReceipt = async (sal: Salary) => {
     const totalDeductions = sal.deductions.reduce((s, d) => s + d.amount, 0);
+    const empId = sal.employee.id;
+    const advInfo = getAdvanceInfo(empId);
     await generateSalaryReceiptPDF({
       employeeName: sal.employee.name,
       employeeRole: sal.employee.role || "",
@@ -206,6 +266,7 @@ export default function EmployeesPage() {
       deductions: sal.deductions.map((d) => ({ reason: d.reason, amount: d.amount })),
       totalDeductions,
       netPay: sal.amount - totalDeductions,
+      advanceBalance: advInfo.outstanding,
     });
   };
 
@@ -227,6 +288,7 @@ export default function EmployeesPage() {
     { key: "employees", label: "Employees" },
     { key: "salary", label: "Salary" },
     { key: "deductions", label: "Deductions" },
+    { key: "advances", label: "Advances" },
   ];
 
   const years = Array.from({ length: 5 }, (_, i) => (currentYear - 2 + i).toString());
@@ -234,14 +296,15 @@ export default function EmployeesPage() {
   const overviewData = employees.filter((e) => e.active).map((emp) => {
     const sal = salaries.find((s) => s.employee.id === emp.id);
     const deds = sal ? sal.deductions.reduce((s, d) => s + d.amount, 0) : 0;
-    return { ...emp, salary: sal?.amount || 0, deductions: deds, balance: (sal?.amount || 0) - deds };
+    const advInfo = getAdvanceInfo(emp.id);
+    return { ...emp, salary: sal?.amount || 0, deductions: deds, balance: (sal?.amount || 0) - deds, advanceOutstanding: advInfo.outstanding };
   });
 
-  // For deduction dialog: show remaining advance limit and salary balance
   const selectedDedEmp = employees.find((e) => e.id === dedForm.employeeId);
   const selectedDedSal = salaries.find((s) => s.employee.id === dedForm.employeeId);
   const existingAdvancesForEmp = deductions.filter((d) => selectedDedEmp && d.employee.name === selectedDedEmp.name && d.reason === "Advance").reduce((s, d) => s + d.amount, 0);
   const existingDedsForSal = selectedDedSal ? selectedDedSal.deductions.reduce((s, d) => s + d.amount, 0) : 0;
+  const selectedDedAdvInfo = selectedDedEmp ? getAdvanceInfo(selectedDedEmp.id) : null;
 
   if (loading) {
     return (
@@ -256,7 +319,7 @@ export default function EmployeesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Employees</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage employees, salaries, and deductions</p>
+          <p className="text-sm text-muted-foreground mt-1">Manage employees, salaries, deductions, and advances</p>
         </div>
         <div className="flex items-center gap-3">
           <Select value={filterMonth} onValueChange={(v: string | null) => setFilterMonth(v || currentMonth.toString())}>
@@ -301,7 +364,8 @@ export default function EmployeesPage() {
                       <th className="pb-3 font-medium text-muted-foreground">Role</th>
                       <th className="pb-3 font-medium text-muted-foreground text-right">Salary</th>
                       <th className="pb-3 font-medium text-muted-foreground text-right">Deductions</th>
-                      <th className="pb-3 font-medium text-muted-foreground text-right">Balance</th>
+                      <th className="pb-3 font-medium text-muted-foreground text-right">Net Pay</th>
+                      <th className="pb-3 font-medium text-muted-foreground text-right">Advance Due</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -312,6 +376,11 @@ export default function EmployeesPage() {
                         <td className="py-3 text-right">{emp.salary > 0 ? formatINR(emp.salary) : <span className="text-muted-foreground">Not set</span>}</td>
                         <td className="py-3 text-right text-red-400">{emp.deductions > 0 ? formatINR(emp.deductions) : "—"}</td>
                         <td className="py-3 text-right font-semibold text-primary">{emp.salary > 0 ? formatINR(emp.balance) : "—"}</td>
+                        <td className="py-3 text-right">
+                          {emp.advanceOutstanding > 0 ? (
+                            <span className="text-amber-400 font-medium">{formatINR(Math.round(emp.advanceOutstanding))}</span>
+                          ) : "—"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -321,6 +390,7 @@ export default function EmployeesPage() {
                       <td className="pt-3 text-right">{formatINR(overviewData.reduce((s, e) => s + e.salary, 0))}</td>
                       <td className="pt-3 text-right text-red-400">{formatINR(overviewData.reduce((s, e) => s + e.deductions, 0))}</td>
                       <td className="pt-3 text-right text-primary">{formatINR(overviewData.reduce((s, e) => s + e.balance, 0))}</td>
+                      <td className="pt-3 text-right text-amber-400">{formatINR(Math.round(overviewData.reduce((s, e) => s + e.advanceOutstanding, 0)))}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -343,39 +413,47 @@ export default function EmployeesPage() {
             </CardContent></Card>
           ) : (
             <div className="grid gap-3">
-              {employees.map((emp) => (
-                <Card key={emp.id} className={`hover:border-primary/30 transition-colors ${!emp.active ? "opacity-50" : ""}`}>
-                  <CardContent className="py-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                          <span className="text-sm font-bold text-primary">{emp.name.charAt(0)}</span>
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium">{emp.name}</p>
-                            {emp.role && <Badge variant="outline" className="text-[10px]">{emp.role}</Badge>}
-                            {!emp.active && <Badge variant="destructive" className="text-[10px]">Inactive</Badge>}
+              {employees.map((emp) => {
+                const advInfo = getAdvanceInfo(emp.id);
+                return (
+                  <Card key={emp.id} className={`hover:border-primary/30 transition-colors ${!emp.active ? "opacity-50" : ""}`}>
+                    <CardContent className="py-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span className="text-sm font-bold text-primary">{emp.name.charAt(0)}</span>
                           </div>
-                          <div className="flex gap-4 mt-0.5 text-xs text-muted-foreground">
-                            {emp.mobile && <span>{emp.mobile}</span>}
-                            {emp.email && <span>{emp.email}</span>}
-                            <span>Joined: {new Date(emp.joinDate).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</span>
-                            {emp.advanceLimit > 0 && <span>Adv. Limit: {formatINR(emp.advanceLimit)}</span>}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{emp.name}</p>
+                              {emp.role && <Badge variant="outline" className="text-[10px]">{emp.role}</Badge>}
+                              {!emp.active && <Badge variant="destructive" className="text-[10px]">Inactive</Badge>}
+                              {advInfo.outstanding > 0 && (
+                                <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                  Adv: {formatINR(Math.round(advInfo.outstanding))}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex gap-4 mt-0.5 text-xs text-muted-foreground">
+                              {emp.mobile && <span>{emp.mobile}</span>}
+                              {emp.email && <span>{emp.email}</span>}
+                              <span>Joined: {new Date(emp.joinDate).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</span>
+                              {emp.advanceLimit > 0 && <span>Adv. Limit: {formatINR(emp.advanceLimit)}</span>}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <p className="text-lg font-semibold text-primary">{formatINR(emp.baseSalary)}</p>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditEmp(emp)}><Edit2 className="w-4 h-4" /></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" onClick={() => deleteEmp(emp)}><Trash2 className="w-4 h-4" /></Button>
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <p className="text-lg font-semibold text-primary">{formatINR(emp.baseSalary)}</p>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditEmp(emp)}><Edit2 className="w-4 h-4" /></Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" onClick={() => deleteEmp(emp)}><Trash2 className="w-4 h-4" /></Button>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>
@@ -473,6 +551,96 @@ export default function EmployeesPage() {
         </div>
       )}
 
+      {/* ===== TAB: ADVANCES ===== */}
+      {tab === "advances" && (
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={openNewAdv}><Plus className="w-4 h-4 mr-2" /> Add Advance</Button>
+          </div>
+          {advances.length === 0 ? (
+            <Card><CardContent className="flex flex-col items-center py-12">
+              <Wallet className="w-12 h-12 text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">No advance salary records</p>
+            </CardContent></Card>
+          ) : (
+            <>
+              {/* Summary per employee */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Advance Summary</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="pb-2 font-medium">Employee</th>
+                          <th className="pb-2 font-medium text-right">Total Advanced</th>
+                          <th className="pb-2 font-medium text-right">Repaid</th>
+                          <th className="pb-2 font-medium text-right">Principal</th>
+                          <th className="pb-2 font-medium text-right">Interest</th>
+                          <th className="pb-2 font-medium text-right">Outstanding</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {employees.filter((e) => e.active).map((emp) => {
+                          const info = getAdvanceInfo(emp.id);
+                          if (info.totalAdvanced === 0) return null;
+                          return (
+                            <tr key={emp.id} className="border-b border-border/50">
+                              <td className="py-2.5 font-medium">{emp.name}</td>
+                              <td className="py-2.5 text-right">{formatINR(info.totalAdvanced)}</td>
+                              <td className="py-2.5 text-right text-green-400">{formatINR(info.totalRepaid)}</td>
+                              <td className="py-2.5 text-right">{formatINR(info.principal)}</td>
+                              <td className="py-2.5 text-right text-amber-400">{formatINR(Math.round(info.interest))}</td>
+                              <td className="py-2.5 text-right font-semibold text-amber-400">{formatINR(Math.round(info.outstanding))}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Individual advance records */}
+              <div className="grid gap-3">
+                {advances.map((adv) => {
+                  const interest = calcInterest(adv.amount, adv.interestRate, adv.date);
+                  const days = Math.floor((Date.now() - new Date(adv.date).getTime()) / (1000 * 60 * 60 * 24));
+                  return (
+                    <Card key={adv.id} className="hover:border-primary/30 transition-colors">
+                      <CardContent className="py-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{adv.employee.name}</p>
+                              <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                {adv.interestRate}% p.a.
+                              </Badge>
+                            </div>
+                            <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+                              <span>{new Date(adv.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                              <span>{days} days</span>
+                              <span>Interest: {formatINR(Math.round(interest))}</span>
+                              {adv.notes && <span>{adv.notes}</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <p className="text-lg font-semibold text-amber-400">{formatINR(adv.amount)}</p>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" onClick={() => deleteAdv(adv)}><Trash2 className="w-4 h-4" /></Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ===== DIALOGS ===== */}
 
       {/* Employee Dialog */}
@@ -555,7 +723,7 @@ export default function EmployeesPage() {
                 <Select value={dedForm.employeeId} onValueChange={(v: string | null) => {
                   const empId = v || "";
                   const sal = salaries.find((s) => s.employee.id === empId);
-                  setDedForm({ ...dedForm, employeeId: empId, salaryId: sal?.id || "" });
+                  setDedForm({ ...dedForm, employeeId: empId, salaryId: dedForm.reason === "Salary" ? (sal?.id || "") : "" });
                 }}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Select employee" /></SelectTrigger>
                   <SelectContent>
@@ -565,7 +733,11 @@ export default function EmployeesPage() {
               </div>
               <div className="space-y-1">
                 <Label>Reason *</Label>
-                <Select value={dedForm.reason} onValueChange={(v: string | null) => setDedForm({ ...dedForm, reason: v || "Advance" })}>
+                <Select value={dedForm.reason} onValueChange={(v: string | null) => {
+                  const reason = v || "Advance";
+                  const sal = salaries.find((s) => s.employee.id === dedForm.employeeId);
+                  setDedForm({ ...dedForm, reason, salaryId: reason === "Salary" ? (sal?.id || "") : "" });
+                }}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {DEDUCTION_REASONS.map((r) => <SelectItem key={r} value={r} label={r}>{r}</SelectItem>)}
@@ -574,18 +746,33 @@ export default function EmployeesPage() {
               </div>
             </div>
 
-            {/* Limits info */}
+            {/* Balance info */}
             {dedForm.employeeId && (
-              <div className="flex gap-4 text-xs">
-                {dedForm.reason === "Advance" && selectedDedEmp && selectedDedEmp.advanceLimit > 0 && (
-                  <span className="text-muted-foreground">
-                    Advance limit: {formatINR(selectedDedEmp.advanceLimit)} | Used: {formatINR(existingAdvancesForEmp)} | Remaining: <span className="text-primary font-medium">{formatINR(selectedDedEmp.advanceLimit - existingAdvancesForEmp)}</span>
-                  </span>
+              <div className="space-y-1 text-xs">
+                {dedForm.reason === "Advance" && selectedDedAdvInfo && (
+                  selectedDedAdvInfo.totalAdvanced > 0 ? (
+                    <p className="text-amber-400">
+                      Advance taken: {formatINR(selectedDedAdvInfo.totalAdvanced)} | Repaid: {formatINR(selectedDedAdvInfo.totalRepaid)} | Balance: <span className="font-semibold">{formatINR(selectedDedAdvInfo.principal)}</span>
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground">No advance taken by this employee</p>
+                  )
                 )}
-                {selectedDedSal && (
-                  <span className="text-muted-foreground">
-                    Salary: {formatINR(selectedDedSal.amount)} | Deducted: {formatINR(existingDedsForSal)} | Available: <span className="text-primary font-medium">{formatINR(selectedDedSal.amount - existingDedsForSal)}</span>
-                  </span>
+                {dedForm.reason === "Salary" && (
+                  <>
+                    {selectedDedAdvInfo && selectedDedAdvInfo.outstanding > 0 && (
+                      <p className="text-amber-400">
+                        Advance outstanding: {formatINR(Math.round(selectedDedAdvInfo.outstanding))} (Principal: {formatINR(selectedDedAdvInfo.principal)} + Interest: {formatINR(Math.round(selectedDedAdvInfo.interest))})
+                      </p>
+                    )}
+                    {selectedDedSal ? (
+                      <p className="text-muted-foreground">
+                        Salary: {formatINR(selectedDedSal.amount)} | Deducted: {formatINR(existingDedsForSal)} | Available: <span className="text-primary font-medium">{formatINR(selectedDedSal.amount - existingDedsForSal)}</span>
+                      </p>
+                    ) : (
+                      <p className="text-muted-foreground">No salary record for this month</p>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -598,6 +785,34 @@ export default function EmployeesPage() {
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setDedDialogOpen(false)}>Cancel</Button>
               <Button onClick={saveDed} disabled={dedSaving}>{dedSaving ? "Saving..." : "Add Deduction"}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Advance Dialog */}
+      <Dialog open={advDialogOpen} onOpenChange={setAdvDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Add Advance Salary</DialogTitle></DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-1">
+              <Label>Employee *</Label>
+              <Select value={advForm.employeeId} onValueChange={(v: string | null) => setAdvForm({ ...advForm, employeeId: v || "" })}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Select employee" /></SelectTrigger>
+                <SelectContent>
+                  {employees.filter((e) => e.active).map((e) => <SelectItem key={e.id} value={e.id} label={e.name}>{e.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1"><Label>Amount (INR) *</Label><Input type="number" value={advForm.amount} onChange={(e) => setAdvForm({ ...advForm, amount: e.target.value })} /></div>
+              <div className="space-y-1"><Label>Interest Rate (%)</Label><Input type="number" value={advForm.interestRate} onChange={(e) => setAdvForm({ ...advForm, interestRate: e.target.value })} /></div>
+              <div className="space-y-1"><Label>Date</Label><Input type="date" value={advForm.date} onChange={(e) => setAdvForm({ ...advForm, date: e.target.value })} /></div>
+            </div>
+            <div className="space-y-1"><Label>Notes</Label><Input value={advForm.notes} onChange={(e) => setAdvForm({ ...advForm, notes: e.target.value })} placeholder="Optional" /></div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setAdvDialogOpen(false)}>Cancel</Button>
+              <Button onClick={saveAdv} disabled={advSaving}>{advSaving ? "Saving..." : "Add Advance"}</Button>
             </div>
           </div>
         </DialogContent>
