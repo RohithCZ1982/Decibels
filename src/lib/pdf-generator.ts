@@ -31,6 +31,7 @@ interface QuotationData {
   items: Array<{
     name: string;
     description?: string | null;
+    hsnCode?: string | null;
     quantity: number;
     unit?: string;
     unitPrice: number;
@@ -148,88 +149,101 @@ function drawQuotationPage(
 
   drawHeader(doc, logoData, badgeData);
 
-  // "Statement of Quotation" or "Tax Invoice"
   const INVOICE_STATUSES = ["APPROVED", "IN_PRODUCTION", "COMPLETED", "CLOSED"];
   const isInvoice = q.status && INVOICE_STATUSES.includes(q.status);
-  doc.setFontSize(16);
-  doc.setFont("Poppins", "bold");
-  doc.setTextColor(...PINK);
-  doc.text(isInvoice ? "Tax Invoice" : "Statement of Quotation", re, 36, { align: "right" });
 
-  // --- CUSTOMER DETAILS BOX ---
-  const custY = 42;
-  const custH = 30;
+  let y = 32;
 
-  doc.setFillColor(248, 248, 238);
-  doc.rect(ml, custY, cw, custH, "F");
-  doc.setDrawColor(210, 210, 200);
-  doc.setLineWidth(0.2);
-  doc.rect(ml, custY, cw, custH, "S");
-
-  // Green tab
-  doc.setFillColor(100, 130, 85);
-  doc.rect(ml, custY, 32, 7, "F");
-  doc.setFontSize(7);
-  doc.setFont("Poppins", "bold");
-  doc.setTextColor(255, 255, 255);
-  doc.text("Customer Details", ml + 1.5, custY + 5);
-
-  // JOB
-  const jobX = pw / 2 + 5;
-  doc.setFontSize(7.5);
-  doc.setFont("Poppins", "bold");
-  doc.setTextColor(...PINK);
-  doc.text("JOB :", jobX, custY + 5);
-  doc.setFont("Poppins", "normal");
-  doc.setTextColor(...BLACK);
-  doc.setFontSize(6.5);
-  const jobLines = doc.splitTextToSize(
-    "We are hereby sending the quotes required for setting up a Home Theater at your place.",
-    re - jobX - 14
-  );
-  doc.text(jobLines, jobX + 14, custY + 3.5, { lineHeightFactor: 1.5 });
-
-  // Customer name & address
+  // --- TITLE BAR ---
+  doc.setFillColor(...PINK);
+  doc.rect(ml, y, cw, 8, "F");
   doc.setFontSize(11);
   doc.setFont("Poppins", "bold");
-  doc.setTextColor(...BLACK);
-  doc.text(q.customer.name, ml + 2, custY + 15);
-
-  doc.setFontSize(9);
-  doc.setFont("Poppins", "normal");
-  doc.text(q.customer.address || "", ml + 2, custY + 21);
-
-  // DATE & Ref
-  const dX = re - 55;
-  doc.setFontSize(8);
-  doc.setFont("Poppins", "bold");
-  doc.setTextColor(...BLACK);
-  doc.text("DATE:", dX, custY + 20);
-  doc.setTextColor(...PINK);
-  doc.text(formatDate(q.billDate || q.createdAt), dX + 18, custY + 20);
-
-  doc.setTextColor(...BLACK);
-  doc.text("Ref. #", dX, custY + 26);
-  doc.setTextColor(...PINK);
-  doc.text(q.quotationNumber, dX + 18, custY + 26);
-
-  // --- PINK TITLE BAR ---
-  const barY = custY + custH + 4;
-  doc.setFillColor(...PINK);
-  doc.rect(ml, barY, cw, 8, "F");
-  doc.setFontSize(9);
-  doc.setFont("Poppins", "bold");
   doc.setTextColor(255, 255, 255);
+  doc.text(isInvoice ? "Tax Invoice" : "Statement of Quotation", pw / 2, y + 5.5, { align: "center" });
+  y += 11;
+
+  // --- REF / DATE / STATUS ROW ---
+  const infoCells: { label: string; value: string }[] = [
+    { label: "Ref #", value: q.quotationNumber },
+    { label: "Date", value: formatDate(q.billDate || q.createdAt) },
+  ];
+  if (!isInvoice && q.validUntil) {
+    infoCells.push({ label: "Valid Until", value: formatDate(q.validUntil) });
+  } else if (!isInvoice && q.status) {
+    infoCells.push({ label: "Status", value: q.status.replace(/_/g, " ") });
+  }
+  const cellW = Math.floor(cw / infoCells.length);
+  doc.setDrawColor(160, 160, 160);
+  doc.setLineWidth(0.3);
+  infoCells.forEach((cell, i) => {
+    const x = ml + i * cellW;
+    const w = i === infoCells.length - 1 ? cw - cellW * i : cellW;
+    doc.setFillColor(245, 245, 240);
+    doc.rect(x, y, w, 7, "FD");
+    doc.setFontSize(7);
+    doc.setFont("Poppins", "bold");
+    doc.setTextColor(120, 120, 120);
+    const lbl = cell.label + " : ";
+    doc.text(lbl, x + 2, y + 4.5);
+    const lblW = doc.getTextWidth(lbl);
+    doc.setFontSize(8.5);
+    doc.setFont("Poppins", "bold");
+    doc.setTextColor(...BLACK);
+    doc.text(cell.value, x + 2 + lblW, y + 4.5);
+  });
+  y += 10;
+
+  // --- CUSTOMER DETAILS ---
+  const custLblW = 28;
+  const custValW = cw - custLblW;
+  const rh = 6;
+  const custFields = [
+    { label: "Customer", value: q.customer.name, bold: true },
+    { label: "Mobile", value: q.customer.mobile || "" },
+    { label: "Email", value: q.customer.email || "" },
+    { label: "Address", value: q.customer.address || "" },
+  ];
+  for (const field of custFields) {
+    doc.setFontSize(field.bold ? 9 : 8);
+    doc.setFont("Poppins", field.bold ? "bold" : "normal");
+    const valLines = doc.splitTextToSize(field.value, custValW - 6);
+    const lineH = field.bold ? 4 : 3.8;
+    const fieldH = Math.max(rh, valLines.length * lineH + 2.5);
+
+    doc.setDrawColor(160, 160, 160);
+    doc.setLineWidth(0.3);
+    doc.setFillColor(248, 248, 245);
+    doc.rect(ml, y, custLblW, fieldH, "FD");
+    doc.rect(ml + custLblW, y, custValW, fieldH, "S");
+    doc.setFontSize(7);
+    doc.setFont("Poppins", "bold");
+    doc.setTextColor(120, 120, 120);
+    doc.text(field.label, ml + 2, y + 4);
+    doc.setFontSize(field.bold ? 9 : 8);
+    doc.setFont("Poppins", field.bold ? "bold" : "normal");
+    doc.setTextColor(...BLACK);
+    doc.text(valLines, ml + custLblW + 3, y + 4);
+    y += fieldH;
+  }
+  y += 4;
+
+  // --- QUOTATION TITLE ---
   const titleText = q.title
     ? `Decibels Home Theater ${q.title}`
     : q.template
       ? `Decibels Home Theater ${q.template.name}`
       : "Decibels Home Theater Quotation";
-  doc.text(titleText, pw / 2, barY + 5.5, { align: "center" });
+  doc.setFillColor(245, 245, 238);
+  doc.setDrawColor(160, 160, 160);
+  doc.rect(ml, y, cw, 7, "FD");
+  doc.setFontSize(9);
+  doc.setFont("Poppins", "bold");
+  doc.setTextColor(...PINK);
+  doc.text(titleText, pw / 2, y + 5, { align: "center" });
+  y += 11;
 
   // --- ITEMS TABLE ---
-  const tableY = barY + 12;
-
   const catOrder: string[] = [];
   const catMap = new Map<string, typeof q.items>();
   for (const item of q.items) {
@@ -246,41 +260,92 @@ function drawQuotationPage(
     return { name, items, subtotal: items.reduce((s, i) => s + i.total, 0) };
   });
 
-  const body: string[][] = [];
-  const rowTypes: ("catHeader" | "item" | "desc" | "subtotal" | "total")[] = [];
+  const tableBody: string[][] = [];
+  const tRowTypes: ("catHeader" | "item" | "subtotal")[] = [];
   let sl = 1;
 
   for (const group of groups) {
-    body.push(["", group.name, "", "", "", "", ""]);
-    rowTypes.push("catHeader");
+    tableBody.push(["", group.name, "", "", "", "", ""]);
+    tRowTypes.push("catHeader");
 
     for (const item of group.items) {
-      body.push([
+      const desc = item.description || item.item?.description || item.notes;
+      const displayName = desc ? `${item.name}\n${desc}` : item.name;
+      tableBody.push([
         sl.toString(),
-        item.name,
-        formatINR(item.unitPrice),
+        displayName,
+        item.hsnCode || "",
         item.quantity.toString(),
         item.unit || "No",
+        formatINR(item.unitPrice),
         formatINR(item.total),
-        "",
       ]);
-      rowTypes.push("item");
-
-      const desc = item.description || item.item?.description || item.notes;
-      if (desc) {
-        body.push(["", desc, "", "", "", "", ""]);
-        rowTypes.push("desc");
-      }
-
+      tRowTypes.push("item");
       sl++;
     }
-    body.push(["", "", "", "", "", "", formatINR(group.subtotal)]);
-    rowTypes.push("subtotal");
+
+    tableBody.push(["", "", "", "", "", "", formatINR(group.subtotal)]);
+    tRowTypes.push("subtotal");
   }
 
-  // --- FINANCIAL SUMMARY ROWS ---
-  body.push(["", "", "", "", "", "Subtotal", formatINR(q.subtotal)]);
-  rowTypes.push("subtotal");
+  autoTable(doc, {
+    startY: y,
+    head: [["Sl", "Product Description", "HSN", "Qty", "Unit", "Rate (₹)", "Amount (₹)"]],
+    body: tableBody,
+    theme: "grid",
+    styles: {
+      font: "Poppins",
+      fontSize: 8,
+      cellPadding: { top: 2, bottom: 2, left: 2, right: 2 },
+      textColor: BLACK,
+      lineColor: [180, 180, 180],
+      lineWidth: 0.3,
+    },
+    headStyles: {
+      fillColor: [PINK[0], PINK[1], PINK[2]],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 8,
+      halign: "center",
+    },
+    columnStyles: {
+      0: { cellWidth: 10, halign: "center" },
+      1: { cellWidth: 68 },
+      2: { cellWidth: 22, halign: "center", fontSize: 7 },
+      3: { cellWidth: 13, halign: "center" },
+      4: { cellWidth: 13, halign: "center" },
+      5: { cellWidth: 30, halign: "right" },
+      6: { cellWidth: 34, halign: "right" },
+    },
+    margin: { left: ml, right: ml },
+    didParseCell: (data) => {
+      if (data.section !== "body") return;
+      const rt = tRowTypes[data.row.index];
+      if (rt === "catHeader") {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.textColor = PINK;
+        data.cell.styles.fillColor = [248, 248, 245] as [number, number, number];
+      }
+      if (rt === "subtotal") {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fillColor = [240, 240, 235] as [number, number, number];
+        data.cell.styles.textColor = PINK;
+      }
+    },
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  y = (doc as any).lastAutoTable.finalY + 2;
+
+  // --- FINANCIAL SUMMARY (right-aligned bordered table) ---
+  const sumLblW = 45;
+  const sumValW = 35;
+  const sumX = re - sumLblW - sumValW;
+  const sumRH = 7;
+
+  const summaryLines: { label: string; value: string; highlight?: boolean }[] = [
+    { label: "Subtotal", value: formatINR(q.subtotal) },
+  ];
 
   if (q.includeGst !== false) {
     const gstMap = new Map<number, number>();
@@ -288,155 +353,92 @@ function drawQuotationPage(
       const rate = item.gstRate ?? 18;
       gstMap.set(rate, (gstMap.get(rate) || 0) + (item.total * rate) / 100);
     }
-    const gstEntries = Array.from(gstMap.entries()).sort((a, b) => a[0] - b[0]);
-    for (const [rate, amt] of gstEntries) {
-      body.push(["", "", "", "", "", `GST @${rate}%`, formatINR(Math.round(amt))]);
-      rowTypes.push("item");
+    for (const [rate, amt] of Array.from(gstMap.entries()).sort((a, b) => a[0] - b[0])) {
+      summaryLines.push({ label: `GST @${rate}%`, value: formatINR(Math.round(amt)) });
     }
   }
 
   if (q.discount > 0) {
-    body.push(["", "", "", "", "", "Discount", "-" + formatINR(q.discount)]);
-    rowTypes.push("item");
+    summaryLines.push({ label: "Discount", value: "- " + formatINR(q.discount) });
   }
 
   if (q.roundOff && q.roundOff !== 0) {
-    body.push(["", "", "", "", "", "Round Off", (q.roundOff > 0 ? "+" : "") + formatINR(q.roundOff)]);
-    rowTypes.push("item");
+    summaryLines.push({ label: "Round Off", value: (q.roundOff > 0 ? "+ " : "") + formatINR(q.roundOff) });
   }
 
-  body.push(["", "", "", "", "", "Grand Total", formatINR(q.grandTotal)]);
-  rowTypes.push("total");
+  summaryLines.push({ label: "Grand Total", value: formatINR(q.grandTotal), highlight: true });
 
-  autoTable(doc, {
-    startY: tableY,
-    head: [["Sl", "Product", "Price Rs.", "Qty", "", "Amount Rs.", "Total"]],
-    body,
-    theme: "plain",
-    styles: {
-      font: "Poppins",
-      fontSize: 9,
-      cellPadding: { top: 2.5, bottom: 2.5, left: 1.5, right: 1.5 },
-      textColor: BLACK,
-      lineWidth: 0,
-    },
-    headStyles: {
-      fillColor: [255, 255, 255],
-      textColor: PINK,
-      fontStyle: "bold",
-      fontSize: 9,
-    },
-    columnStyles: {
-      0: { cellWidth: 10, halign: "center" },
-      1: { cellWidth: 78 },
-      2: { cellWidth: 24, halign: "right" },
-      3: { cellWidth: 10, halign: "center" },
-      4: { cellWidth: 14 },
-      5: { cellWidth: 27, halign: "right" },
-      6: { cellWidth: 27, halign: "right" },
-    },
-    margin: { left: ml, right: ml },
-    didParseCell: (data) => {
-      if (data.section !== "body") return;
-      const rt = rowTypes[data.row.index];
-      if (rt === "catHeader") {
-        data.cell.styles.fontStyle = "bold";
-        data.cell.styles.fontSize = 9;
-        data.cell.styles.textColor = PINK;
-        data.cell.styles.cellPadding = { top: 4, bottom: 2, left: 1.5, right: 1.5 };
-      }
-      if (rt === "desc") {
-        data.cell.styles.textColor = [100, 100, 100] as [number, number, number];
-        data.cell.styles.fontStyle = "italic";
-        data.cell.styles.fontSize = 7;
-        data.cell.styles.cellPadding = { top: 0, bottom: 2, left: 1.5, right: 1.5 };
-      }
-      if (rt === "subtotal") {
-        data.cell.styles.textColor = PINK;
-        data.cell.styles.fontStyle = "bold";
-        data.cell.styles.fontSize = 10;
-      }
-      if (rt === "total") {
-        data.cell.styles.fontStyle = "bold";
-        data.cell.styles.fontSize = 11;
-      }
-    },
-    didDrawCell: (data) => {
-      if (data.section === "head" && data.column.index === 6) {
-        doc.setDrawColor(...PINK);
-        doc.setLineWidth(0.5);
-        const ly = data.cell.y + data.cell.height;
-        doc.line(ml, ly, re, ly);
-      }
-      if (
-        data.section === "body" &&
-        rowTypes[data.row.index] === "catHeader" &&
-        data.column.index === 0
-      ) {
-        doc.setDrawColor(...PINK);
-        doc.setLineWidth(0.3);
-        const ly = data.cell.y + data.cell.height;
-        doc.line(ml, ly, re, ly);
-      }
-      if (
-        data.section === "body" &&
-        rowTypes[data.row.index] === "total" &&
-        data.column.index === 0
-      ) {
-        doc.setDrawColor(...BLACK);
-        doc.setLineWidth(0.3);
-        doc.line(ml, data.cell.y, re, data.cell.y);
-      }
-    },
-  });
+  for (const row of summaryLines) {
+    doc.setDrawColor(160, 160, 160);
+    doc.setLineWidth(0.3);
 
-  // --- NOTES & FOOTER ---
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let y = (doc as any).lastAutoTable.finalY + 6;
-
-  if (q.notes) {
-    doc.setFontSize(9);
-    doc.setFont("Poppins", "bold");
-    doc.setTextColor(...PINK);
-    doc.text("Note :", ml, y);
-    y += 4;
-
-    doc.setFont("Poppins", "italic");
-    doc.setTextColor(...BLACK);
-    doc.setFontSize(8);
-    for (const line of q.notes.split("\n")) {
-      if (!line.trim()) continue;
-      const wrapped = doc.splitTextToSize(line.trim(), cw - 5);
-      doc.text(wrapped, ml, y);
-      y += wrapped.length * 3.5;
+    if (row.highlight) {
+      doc.setFillColor(...PINK);
+      doc.rect(sumX, y, sumLblW, sumRH + 1, "FD");
+      doc.rect(sumX + sumLblW, y, sumValW, sumRH + 1, "FD");
+      doc.setFontSize(10);
+      doc.setFont("Poppins", "bold");
+      doc.setTextColor(255, 255, 255);
+      doc.text(row.label, sumX + 3, y + 5.5);
+      doc.text(row.value, sumX + sumLblW + sumValW - 3, y + 5.5, { align: "right" });
+      y += sumRH + 1;
+    } else {
+      doc.setFillColor(248, 248, 245);
+      doc.rect(sumX, y, sumLblW, sumRH, "FD");
+      doc.rect(sumX + sumLblW, y, sumValW, sumRH, "S");
+      doc.setFontSize(8);
+      doc.setFont("Poppins", "bold");
+      doc.setTextColor(120, 120, 120);
+      doc.text(row.label, sumX + 3, y + 4.8);
+      doc.setFont("Poppins", "normal");
+      doc.setTextColor(...BLACK);
+      doc.text(row.value, sumX + sumLblW + sumValW - 3, y + 4.8, { align: "right" });
+      y += sumRH;
     }
   }
 
+  y += 6;
+
+  // --- NOTES ---
+  if (q.notes) {
+    doc.setFontSize(8);
+    doc.setFont("Poppins", "bold");
+    doc.setTextColor(...PINK);
+    doc.text("Notes:", ml, y);
+    y += 4;
+    doc.setFont("Poppins", "italic");
+    doc.setTextColor(...BLACK);
+    doc.setFontSize(7.5);
+    for (const line of q.notes.split("\n")) {
+      if (!line.trim()) continue;
+      const wrapped = doc.splitTextToSize(line.trim(), cw - 5);
+      doc.text(wrapped, ml + 2, y);
+      y += wrapped.length * 3.5;
+    }
+    y += 2;
+  }
+
+  // --- FOOTER ---
+  doc.setFontSize(7);
+  doc.setFont("Poppins", "normal");
+  doc.setTextColor(80, 80, 80);
+  doc.text(q.includeGst !== false ? "GST included as detailed above." : "GST Not Applicable.", ml, y);
   y += 4;
 
   doc.setFontSize(8);
   doc.setFont("Poppins", "bold");
   doc.setTextColor(...BLACK);
-  const ref = "Terms And Conditions are enclosed herewith Attachment 1.";
-  doc.text(ref, ml, y);
-  const tw = doc.getTextWidth(ref);
+  const termsRef = "Terms And Conditions are enclosed herewith Attachment 1.";
+  doc.text(termsRef, ml, y);
+  const tw = doc.getTextWidth(termsRef);
   doc.setDrawColor(...BLACK);
   doc.setLineWidth(0.3);
   doc.line(ml, y + 0.8, ml + tw, y + 0.8);
 
-  y += 5;
-  doc.setFontSize(7);
-  doc.setFont("Poppins", "normal");
-  doc.text(q.includeGst !== false ? "GST included as detailed above." : "GST Not Applicable.", ml, y);
-
   doc.setFontSize(9);
   doc.setFont("Poppins", "italic");
   doc.setTextColor(80, 80, 80);
-  doc.text("Authorized by", re - 40, y + 8);
-  doc.setFont("Poppins", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...BLACK);
-  doc.text(q.createdBy?.name || "N Manikantan Iyer", re - 40, y + 16);
+  doc.text("Authorized by", re - 40, y + 10);
 }
 
 function drawPaymentsPage(doc: jsPDF, q: QuotationData, logoData: string, badgeData: string) {

@@ -18,11 +18,11 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   return withAuth(async () => {
     const body = await request.json();
-    const { name, order } = body;
+    const { name, order, hsnCode } = body;
     if (!name) return errorResponse("Name is required");
 
     const category = await prisma.category.create({
-      data: { name, order: order || 0 },
+      data: { name, order: order || 0, hsnCode: hsnCode || null },
     });
     return jsonResponse(category, 201);
   }, "ADMIN");

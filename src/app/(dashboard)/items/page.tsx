@@ -28,12 +28,14 @@ import { useAuth } from "@/lib/auth-context";
 interface SubCategory {
   id: string;
   name: string;
+  hsnCode: string | null;
   categoryId: string;
 }
 
 interface Category {
   id: string;
   name: string;
+  hsnCode: string | null;
   _count?: { items: number };
   subCategories?: SubCategory[];
 }
@@ -123,6 +125,8 @@ export default function ItemsPage() {
   const [newCategory, setNewCategory] = useState("");
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newSubCategory, setNewSubCategory] = useState("");
+  const [newCategoryHsn, setNewCategoryHsn] = useState("");
+  const [newSubCategoryHsn, setNewSubCategoryHsn] = useState("");
   const [showNewSubCategory, setShowNewSubCategory] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -228,7 +232,7 @@ export default function ItemsPage() {
       const catRes = await fetch("/api/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newCategory }),
+        body: JSON.stringify({ name: newCategory, hsnCode: newCategoryHsn || null }),
       });
       if (!catRes.ok) {
         toast.error("Failed to create category");
@@ -244,7 +248,7 @@ export default function ItemsPage() {
       const subRes = await fetch("/api/subcategories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newSubCategory, categoryId: catId }),
+        body: JSON.stringify({ name: newSubCategory, categoryId: catId, hsnCode: newSubCategoryHsn || null }),
       });
       if (!subRes.ok) {
         toast.error("Failed to create sub-category");
@@ -275,7 +279,9 @@ export default function ItemsPage() {
       setShowNewCategory(false);
       setShowNewSubCategory(false);
       setNewCategory("");
+      setNewCategoryHsn("");
       setNewSubCategory("");
+      setNewSubCategoryHsn("");
       loadData();
     } else {
       const data = await res.json();
@@ -389,18 +395,35 @@ export default function ItemsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label>Category *</Label>
-                    <Select value={form.categoryId} onValueChange={(v: string | null) => { const val = v || ""; setForm({ ...form, categoryId: val, subCategoryId: "" }); setShowNewCategory(val === "__new__"); setShowNewSubCategory(false); }}>
+                    <Select key={`cat-${form.categoryId}`} value={form.categoryId} onValueChange={(v: string | null) => {
+                      const val = v || "";
+                      const cat = categories.find((c) => c.id === val);
+                      setForm({ ...form, categoryId: val, subCategoryId: "", hsnCode: cat?.hsnCode || form.hsnCode });
+                      setShowNewCategory(val === "__new__");
+                      setShowNewSubCategory(false);
+                    }}>
                       <SelectTrigger className="w-full"><SelectValue placeholder="Select category" /></SelectTrigger>
                       <SelectContent>
                         {categories.map((c) => <SelectItem key={c.id} value={c.id} label={c.name}>{c.name}</SelectItem>)}
                         <SelectItem value="__new__" label="+ New Category">+ New Category</SelectItem>
                       </SelectContent>
                     </Select>
-                    {showNewCategory && <Input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="New category name" className="mt-1" />}
+                    {showNewCategory && (
+                      <div className="flex gap-2 mt-1">
+                        <Input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="Category name" className="flex-1" />
+                        <Input value={newCategoryHsn} onChange={(e) => setNewCategoryHsn(e.target.value)} placeholder="HSN" className="w-24" />
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-1">
                     <Label>Sub-Category</Label>
-                    <Select value={form.subCategoryId || "none"} onValueChange={(v: string | null) => { const val = v || "none"; setForm({ ...form, subCategoryId: val === "none" ? "" : val }); setShowNewSubCategory(val === "__new__"); }}>
+                    <Select key={`sub-${form.subCategoryId || "none"}-${form.categoryId}`} value={form.subCategoryId || "none"} onValueChange={(v: string | null) => {
+                      const val = v || "none";
+                      const sub = formSubCategories.find((s) => s.id === val);
+                      const cat = categories.find((c) => c.id === form.categoryId);
+                      setForm({ ...form, subCategoryId: val === "none" ? "" : val, hsnCode: sub?.hsnCode || cat?.hsnCode || form.hsnCode });
+                      setShowNewSubCategory(val === "__new__");
+                    }}>
                       <SelectTrigger className="w-full"><SelectValue placeholder="None" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none" label="None">None</SelectItem>
@@ -408,7 +431,12 @@ export default function ItemsPage() {
                         <SelectItem value="__new__" label="+ New Sub-Category">+ New Sub-Category</SelectItem>
                       </SelectContent>
                     </Select>
-                    {showNewSubCategory && <Input value={newSubCategory} onChange={(e) => setNewSubCategory(e.target.value)} placeholder="New sub-category" className="mt-1" />}
+                    {showNewSubCategory && (
+                      <div className="flex gap-2 mt-1">
+                        <Input value={newSubCategory} onChange={(e) => setNewSubCategory(e.target.value)} placeholder="Sub-category name" className="flex-1" />
+                        <Input value={newSubCategoryHsn} onChange={(e) => setNewSubCategoryHsn(e.target.value)} placeholder="HSN" className="w-24" />
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-1">

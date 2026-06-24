@@ -22,11 +22,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return withAuth(async () => {
     const body = await request.json();
-    const { name, categoryId } = body;
+    const { name, categoryId, hsnCode } = body;
     if (!name || !categoryId) return errorResponse("Name and category are required");
 
     const subCategory = await prisma.subCategory.create({
-      data: { name, categoryId },
+      data: { name, categoryId, hsnCode: hsnCode || null },
     });
     return jsonResponse(subCategory, 201);
   }, "ADMIN");
