@@ -35,8 +35,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     if (items) {
-      await prisma.quotationItem.deleteMany({ where: { quotationId: id } });
-
       const disc = discount ?? existing.discount;
       const gstFlag = includeGst ?? existing.includeGst;
       const calc = calculateQuotationTotals({
@@ -46,41 +44,45 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         roundOff: enableRoundOff ?? (existing.roundOff !== 0),
       });
 
-      const quotation = await prisma.quotation.update({
-        where: { id },
-        data: {
-          subtotal: calc.subtotal,
-          gstPercent: 0,
-          gstAmount: calc.gstAmount,
-          discount: calc.discount,
-          grandTotal: calc.grandTotal,
-          roundOff: calc.roundOff,
-          includeGst: gstFlag,
-          billDate: billDate ? new Date(billDate) : undefined,
-          notes,
-          terms,
-          validUntil: validUntil ? new Date(validUntil) : undefined,
-          items: {
-            create: items.map((item: { name: string; description?: string; hsnCode?: string; quantity: number; unit?: string; unitPrice: number; gstRate?: number; itemId?: string; notes?: string }, idx: number) => ({
-              name: item.name,
-              description: item.description || null,
-              hsnCode: item.hsnCode || null,
-              quantity: item.quantity,
-              unit: item.unit || "No",
-              unitPrice: item.unitPrice,
-              gstRate: item.gstRate ?? 18,
-              total: item.quantity * item.unitPrice,
-              itemId: item.itemId || null,
-              notes: item.notes || null,
-              sortOrder: idx,
-            })),
+      const quotation = await prisma.$transaction(async (tx) => {
+        await tx.quotationItem.deleteMany({ where: { quotationId: id } });
+        return tx.quotation.update({
+          where: { id },
+          data: {
+            subtotal: calc.subtotal,
+            gstPercent: 0,
+            gstAmount: calc.gstAmount,
+            discount: calc.discount,
+            grandTotal: calc.grandTotal,
+            roundOff: calc.roundOff,
+            includeGst: gstFlag,
+            billDate: billDate ? new Date(billDate) : undefined,
+            notes,
+            terms,
+            validUntil: validUntil ? new Date(validUntil) : undefined,
+            items: {
+              create: items.map((item: { name: string; description?: string; hsnCode?: string; quantity: number; unit?: string; unitPrice: number; discount?: number; gstRate?: number; itemId?: string; notes?: string }, idx: number) => ({
+                name: item.name,
+                description: item.description || null,
+                hsnCode: item.hsnCode || null,
+                quantity: Number(item.quantity) || 1,
+                unit: item.unit || "No",
+                unitPrice: Number(item.unitPrice) || 0,
+                discount: Number(item.discount) || 0,
+                gstRate: Number(item.gstRate) ?? 18,
+                total: (Number(item.quantity) || 1) * (Number(item.unitPrice) || 0) * (1 - (Number(item.discount) || 0) / 100),
+                itemId: item.itemId || null,
+                notes: item.notes || null,
+                sortOrder: idx,
+              })),
+            },
           },
-        },
-        include: {
-          customer: true,
-          items: { orderBy: { sortOrder: "asc" } },
-          createdBy: { select: { id: true, name: true } },
-        },
+          include: {
+            customer: true,
+            items: { orderBy: { sortOrder: "asc" } },
+            createdBy: { select: { id: true, name: true } },
+          },
+        });
       });
       return jsonResponse(quotation);
     }

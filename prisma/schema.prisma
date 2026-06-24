@@ -205,6 +205,7 @@ model QuotationItem {
   quantity    Int     @default(1)
   unit        String  @default("No")
   unitPrice   Float
+  discount    Float   @default(0)
   gstRate     Float   @default(18)
   total       Float
   notes       String?

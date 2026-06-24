@@ -4,6 +4,7 @@ export const INVOICE_STATUSES = ["APPROVED", "IN_PRODUCTION", "COMPLETED", "CLOS
 interface CalcItem {
   quantity: number;
   unitPrice: number;
+  discount?: number;
   gstRate: number;
 }
 
@@ -24,13 +25,19 @@ export interface CalcResult {
 }
 
 export function calculateQuotationTotals(input: CalcInput): CalcResult {
-  const subtotal = input.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const subtotal = input.items.reduce((sum, item) => {
+    const base = item.quantity * item.unitPrice;
+    const discPct = item.discount || 0;
+    return sum + base * (1 - discPct / 100);
+  }, 0);
   const disc = input.discount;
 
   const rateMap = new Map<number, number>();
   for (const item of input.items) {
     if (item.unitPrice <= 0) continue;
-    const lineTotal = item.quantity * item.unitPrice;
+    const base = item.quantity * item.unitPrice;
+    const discPct = item.discount || 0;
+    const lineTotal = base * (1 - discPct / 100);
     rateMap.set(item.gstRate, (rateMap.get(item.gstRate) || 0) + lineTotal);
   }
 

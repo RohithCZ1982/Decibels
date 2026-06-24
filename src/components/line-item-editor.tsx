@@ -13,6 +13,7 @@ export interface LineItem {
   quantity: number;
   unit: string;
   unitPrice: number;
+  discount: number;
   gstRate: number;
   itemId: string | null;
   notes: string;
@@ -38,7 +39,7 @@ export function nextLineItemKey() {
 }
 
 export function emptyLineItem(): LineItem {
-  return { key: nextLineItemKey(), name: "", description: "", hsnCode: "", quantity: 1, unit: "No", unitPrice: 0, gstRate: 18, itemId: null, notes: "" };
+  return { key: nextLineItemKey(), name: "", description: "", hsnCode: "", quantity: 1, unit: "No", unitPrice: 0, discount: 0, gstRate: 18, itemId: null, notes: "" };
 }
 
 function formatINR(n: number) {
@@ -112,10 +113,11 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
           <Plus className="w-4 h-4 mr-1" /> Add Item
         </Button>
       </div>
-      <div className="grid grid-cols-[1fr_70px_110px_70px_110px_36px_40px] gap-2 text-xs font-medium text-muted-foreground px-1">
+      <div className="grid grid-cols-[1fr_60px_100px_60px_60px_100px_36px_40px] gap-2 text-xs font-medium text-muted-foreground px-1">
         <span>Item Name</span>
         <span>Qty</span>
         <span>Unit Price</span>
+        <span>Disc %</span>
         <span>GST %</span>
         <span>Total</span>
         <span></span>
@@ -123,7 +125,7 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
       </div>
       {lineItems.map((li, idx) => (
         <div key={li.key} className="space-y-1">
-          <div className="grid grid-cols-[1fr_70px_110px_70px_110px_36px_40px] gap-2 items-start">
+          <div className="grid grid-cols-[1fr_60px_100px_60px_60px_100px_36px_40px] gap-2 items-start">
             <div className="relative">
               <Input
                 placeholder="Type to search items..."
@@ -169,23 +171,31 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
             <Input
               type="number"
               min={1}
-              value={li.quantity}
+              value={li.quantity || ""}
               onChange={(e) => updateLineItem(idx, "quantity", parseInt(e.target.value) || 1)}
               className="text-center"
             />
             <Input
               type="number"
-              value={li.unitPrice}
+              value={li.unitPrice || ""}
               onChange={(e) => updateLineItem(idx, "unitPrice", parseFloat(e.target.value) || 0)}
             />
             <Input
               type="number"
-              value={li.gstRate}
+              min={0}
+              max={100}
+              value={li.discount || ""}
+              onChange={(e) => updateLineItem(idx, "discount", parseFloat(e.target.value) || 0)}
+              className="text-center"
+            />
+            <Input
+              type="number"
+              value={li.gstRate || ""}
               onChange={(e) => updateLineItem(idx, "gstRate", parseFloat(e.target.value) || 0)}
               className="text-center"
             />
             <div className="h-9 flex items-center px-3 bg-muted/50 rounded-md text-sm font-medium">
-              {formatINR(li.quantity * li.unitPrice)}
+              {formatINR(li.quantity * li.unitPrice * (1 - (li.discount || 0) / 100))}
             </div>
             <div className="flex flex-col">
               <Button

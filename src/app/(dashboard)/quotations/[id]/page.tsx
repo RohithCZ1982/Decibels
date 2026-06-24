@@ -42,9 +42,10 @@ import {
   Trash2,
   Printer,
   Edit2,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
-import { generateQuotationPDF } from "@/lib/pdf-generator";
+import { generateQuotationPDF, generateItemListPDF } from "@/lib/pdf-generator";
 import { LineItemEditor, nextLineItemKey, emptyLineItem, type LineItem, type CatalogItem } from "@/components/line-item-editor";
 import { calculateQuotationTotals, EDITABLE_STATUSES, INVOICE_STATUSES } from "@/lib/quotation-calc";
 
@@ -77,6 +78,7 @@ interface QuotationDetail {
     quantity: number;
     unit: string;
     unitPrice: number;
+    discount: number;
     gstRate: number;
     total: number;
     notes: string | null;
@@ -183,6 +185,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
         quantity: item.quantity,
         unit: item.unit || "No",
         unitPrice: item.unitPrice,
+        discount: item.discount || 0,
         gstRate: item.gstRate,
         itemId: item.item ? undefined as unknown as string : null,
         notes: item.notes || "",
@@ -217,6 +220,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
           quantity: li.quantity,
           unit: li.unit || "No",
           unitPrice: li.unitPrice,
+          discount: li.discount || 0,
           gstRate: li.gstRate,
           itemId: li.itemId,
           notes: li.notes,
@@ -387,6 +391,11 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
     await generateQuotationPDF(quotation);
   };
 
+  const handleItemListPDF = async () => {
+    if (!quotation) return;
+    await generateItemListPDF(quotation);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -463,6 +472,11 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
               <Button variant="outline" onClick={handleDownloadPDF}>
                 <Download className="w-4 h-4 mr-2" /> PDF
               </Button>
+              {["IN_PRODUCTION", "COMPLETED", "CLOSED"].includes(quotation.status) && (
+                <Button variant="outline" onClick={handleItemListPDF}>
+                  <ClipboardList className="w-4 h-4 mr-2" /> Item List
+                </Button>
+              )}
               {action && (
                 <Button onClick={() => updateStatus(action.status)} disabled={saving}>
                   <action.icon className="w-4 h-4 mr-2" />
@@ -642,6 +656,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
                     <th className="text-left py-2 pr-4">HSN</th>
                     <th className="text-right py-2 pr-4">Qty</th>
                     <th className="text-right py-2 pr-4">Unit Price</th>
+                    <th className="text-right py-2 pr-4">Disc %</th>
                     <th className="text-right py-2 pr-4">GST</th>
                     <th className="text-right py-2">Total</th>
                   </tr>
@@ -660,6 +675,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
                       <td className="py-2.5 pr-4 text-xs text-muted-foreground">{item.hsnCode || "—"}</td>
                       <td className="py-2.5 pr-4 text-right">{item.quantity}</td>
                       <td className="py-2.5 pr-4 text-right">{formatINR(item.unitPrice)}</td>
+                      <td className="py-2.5 pr-4 text-right text-muted-foreground">{item.discount ? `${item.discount}%` : "—"}</td>
                       <td className="py-2.5 pr-4 text-right text-muted-foreground">{item.gstRate}%</td>
                       <td className="py-2.5 text-right font-medium">{formatINR(item.total)}</td>
                     </tr>

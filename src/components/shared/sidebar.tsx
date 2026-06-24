@@ -23,8 +23,8 @@ import { cn } from "@/lib/utils";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Quotations", href: "/quotations", icon: FileText },
   { name: "Customers", href: "/customers", icon: Users },
+  { name: "Quotations", href: "/quotations", icon: FileText },
   { name: "Items", href: "/items", icon: Package, adminOnly: true },
   { name: "Templates", href: "/templates", icon: Layers, adminOnly: true },
   { name: "Payments", href: "/payments", icon: CreditCard },

@@ -35,6 +35,7 @@ interface QuotationData {
     quantity: number;
     unit?: string;
     unitPrice: number;
+    discount?: number;
     gstRate?: number;
     total: number;
     notes: string | null;
@@ -103,6 +104,118 @@ export async function generateQuotationPDF(quotation: QuotationData) {
 
   doc.addPage();
   drawTermsPage(doc);
+
+  window.open(doc.output("bloburl"), "_blank");
+}
+
+export async function generateItemListPDF(quotation: QuotationData) {
+  const doc = new jsPDF("p", "mm", "a4");
+  const pw = 210;
+  const ml = 10;
+  const re = pw - ml;
+  const cw = pw - ml * 2;
+
+  const [logoData, badgeData] = await Promise.all([
+    loadImage("/logo.png"),
+    loadImage("/25years.png"),
+  ]);
+
+  await registerPoppins(doc);
+  drawHeader(doc, logoData, badgeData);
+
+  let y = 32;
+
+  // Title
+  doc.setFillColor(...PINK);
+  doc.rect(ml, y, cw, 8, "F");
+  doc.setFontSize(11);
+  doc.setFont("Poppins", "bold");
+  doc.setTextColor(255, 255, 255);
+  doc.text("List of Items", pw / 2, y + 5.5, { align: "center" });
+  y += 11;
+
+  // Ref & Customer row
+  doc.setDrawColor(160, 160, 160);
+  doc.setLineWidth(0.3);
+  const halfW = cw / 2;
+
+  doc.setFillColor(248, 248, 245);
+  doc.rect(ml, y, halfW, 7, "FD");
+  doc.rect(ml + halfW, y, halfW, 7, "FD");
+
+  doc.setFontSize(7);
+  doc.setFont("Poppins", "bold");
+  doc.setTextColor(120, 120, 120);
+  doc.text("Ref # : ", ml + 2, y + 4.5);
+  const refLblW = doc.getTextWidth("Ref # : ");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...BLACK);
+  doc.text(quotation.quotationNumber, ml + 2 + refLblW, y + 4.5);
+
+  doc.setFontSize(7);
+  doc.setTextColor(120, 120, 120);
+  doc.text("Customer : ", ml + halfW + 2, y + 4.5);
+  const custLblW = doc.getTextWidth("Customer : ");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...BLACK);
+  doc.text(quotation.customer.name, ml + halfW + 2 + custLblW, y + 4.5);
+  y += 10;
+
+  // Items table — Sl, Item, Description, Qty
+  const body: string[][] = [];
+  let sl = 1;
+  for (const item of quotation.items) {
+    const desc = item.description || item.item?.description || item.notes || "";
+    body.push([
+      sl.toString(),
+      item.name,
+      desc,
+      item.quantity.toString(),
+    ]);
+    sl++;
+  }
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Sl", "Item", "Description", "Qty"]],
+    body,
+    theme: "grid",
+    styles: {
+      font: "Poppins",
+      fontSize: 8,
+      cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+      textColor: BLACK,
+      lineColor: [180, 180, 180],
+      lineWidth: 0.3,
+    },
+    headStyles: {
+      fillColor: [PINK[0], PINK[1], PINK[2]],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 8,
+      halign: "center",
+    },
+    columnStyles: {
+      0: { cellWidth: 12, halign: "center" },
+      1: { cellWidth: 70 },
+      2: { cellWidth: 90 },
+      3: { cellWidth: 18, halign: "center" },
+    },
+    margin: { left: ml, right: ml },
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  y = (doc as any).lastAutoTable.finalY + 10;
+
+  doc.setFontSize(8);
+  doc.setFont("Poppins", "normal");
+  doc.setTextColor(120, 120, 120);
+  doc.text(`Total Items: ${quotation.items.length}`, ml, y);
+
+  doc.setFontSize(9);
+  doc.setFont("Poppins", "italic");
+  doc.setTextColor(80, 80, 80);
+  doc.text("Authorized by", re - 40, y + 10);
 
   window.open(doc.output("bloburl"), "_blank");
 }
@@ -264,33 +377,64 @@ function drawQuotationPage(
   const tRowTypes: ("catHeader" | "item" | "subtotal")[] = [];
   let sl = 1;
 
+  const hasAnyDiscount = q.items.some((item) => (item.discount || 0) > 0);
+
   for (const group of groups) {
-    tableBody.push(["", group.name, "", "", "", "", ""]);
+    tableBody.push(hasAnyDiscount ? ["", group.name, "", "", "", "", "", ""] : ["", group.name, "", "", "", "", ""]);
     tRowTypes.push("catHeader");
 
     for (const item of group.items) {
       const desc = item.description || item.item?.description || item.notes;
       const displayName = desc ? `${item.name}\n${desc}` : item.name;
-      tableBody.push([
+      const discPct = item.discount || 0;
+      const row = [
         sl.toString(),
         displayName,
         item.hsnCode || "",
         item.quantity.toString(),
         item.unit || "No",
         formatINR(item.unitPrice),
-        formatINR(item.total),
-      ]);
+      ];
+      if (hasAnyDiscount) row.push(discPct > 0 ? `${discPct}%` : "");
+      row.push(formatINR(item.total));
+      tableBody.push(row);
       tRowTypes.push("item");
       sl++;
     }
 
-    tableBody.push(["", "", "", "", "", "", formatINR(group.subtotal)]);
+    const subRow = hasAnyDiscount ? ["", "", "", "", "", "", "", formatINR(group.subtotal)] : ["", "", "", "", "", "", formatINR(group.subtotal)];
+    tableBody.push(subRow);
     tRowTypes.push("subtotal");
   }
 
+  const headRow = ["Sl", "Product Description", "HSN", "Qty", "Unit", "Rate (₹)"];
+  if (hasAnyDiscount) headRow.push("Disc");
+  headRow.push("Amount (₹)");
+
+  const colStyles: Record<number, object> = hasAnyDiscount
+    ? {
+        0: { cellWidth: 10, halign: "center" },
+        1: { cellWidth: 60 },
+        2: { cellWidth: 20, halign: "center", fontSize: 7 },
+        3: { cellWidth: 13, halign: "center" },
+        4: { cellWidth: 13, halign: "center" },
+        5: { cellWidth: 26, halign: "right" },
+        6: { cellWidth: 16, halign: "center" },
+        7: { cellWidth: 32, halign: "right" },
+      }
+    : {
+        0: { cellWidth: 10, halign: "center" },
+        1: { cellWidth: 68 },
+        2: { cellWidth: 22, halign: "center", fontSize: 7 },
+        3: { cellWidth: 13, halign: "center" },
+        4: { cellWidth: 13, halign: "center" },
+        5: { cellWidth: 30, halign: "right" },
+        6: { cellWidth: 34, halign: "right" },
+      };
+
   autoTable(doc, {
     startY: y,
-    head: [["Sl", "Product Description", "HSN", "Qty", "Unit", "Rate (₹)", "Amount (₹)"]],
+    head: [headRow],
     body: tableBody,
     theme: "grid",
     styles: {
@@ -308,15 +452,7 @@ function drawQuotationPage(
       fontSize: 8,
       halign: "center",
     },
-    columnStyles: {
-      0: { cellWidth: 10, halign: "center" },
-      1: { cellWidth: 68 },
-      2: { cellWidth: 22, halign: "center", fontSize: 7 },
-      3: { cellWidth: 13, halign: "center" },
-      4: { cellWidth: 13, halign: "center" },
-      5: { cellWidth: 30, halign: "right" },
-      6: { cellWidth: 34, halign: "right" },
-    },
+    columnStyles: colStyles,
     margin: { left: ml, right: ml },
     didParseCell: (data) => {
       if (data.section !== "body") return;
