@@ -16,6 +16,7 @@ import { Plus, Edit2, Trash2, Users, Printer, IndianRupee, Wallet } from "lucide
 import { toast } from "sonner";
 import { generateSalaryReceiptPDF } from "@/lib/salary-pdf";
 import { generateDeductionReceiptPDF } from "@/lib/deduction-pdf";
+import { generateAdvanceStatementPDF } from "@/lib/advance-pdf";
 
 interface Employee {
   id: string;
@@ -86,6 +87,7 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [salaries, setSalaries] = useState<Salary[]>([]);
   const [deductions, setDeductions] = useState<SalaryDeduction[]>([]);
+  const [allDeductions, setAllDeductions] = useState<SalaryDeduction[]>([]);
   const [advances, setAdvances] = useState<SalaryAdvance[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -131,24 +133,29 @@ export default function EmployeesPage() {
     if (res.ok) setAdvances(await res.json());
   }, []);
 
+  const loadAllDeductions = useCallback(async () => {
+    const res = await fetch("/api/salary-deductions?all=true");
+    if (res.ok) setAllDeductions(await res.json());
+  }, []);
+
   useEffect(() => {
     setLoading(true);
-    Promise.all([loadEmployees(), loadSalaries(), loadDeductions(), loadAdvances()]).finally(() => setLoading(false));
-  }, [loadEmployees, loadSalaries, loadDeductions, loadAdvances]);
+    Promise.all([loadEmployees(), loadSalaries(), loadDeductions(), loadAdvances(), loadAllDeductions()]).finally(() => setLoading(false));
+  }, [loadEmployees, loadSalaries, loadDeductions, loadAdvances, loadAllDeductions]);
 
-  // Advance balance calculation per employee
+  // Advance balance calculation per employee (uses allDeductions across all months)
   function getAdvanceInfo(empId: string) {
-    const empAdvances = advances.filter((a) => a.employee.name === employees.find((e) => e.id === empId)?.name);
+    const empName = employees.find((e) => e.id === empId)?.name;
+    const empAdvances = advances.filter((a) => a.employee.name === empName);
     const totalAdvanced = empAdvances.reduce((s, a) => s + a.amount, 0);
     const totalInterest = empAdvances.reduce((s, a) => s + calcInterest(a.amount, a.interestRate, a.date), 0);
-    // "Salary" reason deductions reduce the advance balance
-    const empName = employees.find((e) => e.id === empId)?.name;
-    const salaryDeductions = empName
-      ? deductions.filter((d) => d.employee.name === empName && d.reason === "Salary").reduce((s, d) => s + d.amount, 0)
+    // Both "Advance" and "Salary" reason deductions reduce the advance balance
+    const totalRepaid = empName
+      ? allDeductions.filter((d) => d.employee.name === empName && (d.reason === "Advance" || d.reason === "Salary")).reduce((s, d) => s + d.amount, 0)
       : 0;
-    const principal = Math.max(0, totalAdvanced - salaryDeductions);
+    const principal = Math.max(0, totalAdvanced - totalRepaid);
     const interest = totalAdvanced > 0 ? Math.round(totalInterest * (principal / totalAdvanced)) : 0;
-    return { totalAdvanced, totalRepaid: salaryDeductions, principal, interest, outstanding: principal + interest };
+    return { totalAdvanced, totalRepaid, principal, interest, outstanding: principal + interest };
   }
 
   // Employee CRUD
@@ -225,14 +232,14 @@ export default function EmployeesPage() {
 
     setDedSaving(true);
     const res = await fetch("/api/salary-deductions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(dedForm) });
-    if (res.ok) { toast.success("Deduction added"); setDedDialogOpen(false); loadDeductions(); loadSalaries(); }
+    if (res.ok) { toast.success("Deduction added"); setDedDialogOpen(false); loadDeductions(); loadAllDeductions(); loadSalaries(); }
     else { const d = await res.json(); toast.error(d.error || "Failed"); }
     setDedSaving(false);
   };
   const deleteDed = async (d: SalaryDeduction) => {
     if (!confirm("Delete this deduction?")) return;
     const res = await fetch(`/api/salary-deductions/${d.id}`, { method: "DELETE" });
-    if (res.ok) { toast.success("Deleted"); loadDeductions(); loadSalaries(); }
+    if (res.ok) { toast.success("Deleted"); loadDeductions(); loadAllDeductions(); loadSalaries(); }
   };
 
   // Advance CRUD
@@ -251,6 +258,29 @@ export default function EmployeesPage() {
     if (!confirm("Delete this advance record?")) return;
     const res = await fetch(`/api/salary-advances/${a.id}`, { method: "DELETE" });
     if (res.ok) { toast.success("Deleted"); loadAdvances(); }
+  };
+
+  const printAdvanceStatement = async (adv: SalaryAdvance) => {
+    const empName = adv.employee.name;
+    const empObj = employees.find((e) => e.name === empName);
+    const empDeds = allDeductions
+      .filter((d) => d.employee.name === empName && (d.reason === "Advance" || d.reason === "Salary"))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const advInfo = empObj ? getAdvanceInfo(empObj.id) : { totalAdvanced: 0, totalRepaid: 0, principal: 0, interest: 0, outstanding: 0 };
+    const totalAdvanced = advances.filter((a) => a.employee.name === empName).reduce((s, a) => s + a.amount, 0);
+    await generateAdvanceStatementPDF({
+      employeeName: empName,
+      employeeRole: adv.employee.role || "",
+      advanceAmount: totalAdvanced,
+      advanceDate: adv.date,
+      interestRate: adv.interestRate,
+      advanceNotes: adv.notes,
+      deductions: empDeds.map((d) => ({ amount: d.amount, reason: d.reason, date: d.date, notes: d.notes })),
+      totalRepaid: advInfo.totalRepaid,
+      principal: advInfo.principal,
+      interest: advInfo.interest,
+      outstanding: advInfo.outstanding,
+    });
   };
 
   const printReceipt = async (sal: Salary) => {
@@ -295,9 +325,11 @@ export default function EmployeesPage() {
 
   const overviewData = employees.filter((e) => e.active).map((emp) => {
     const sal = salaries.find((s) => s.employee.id === emp.id);
-    const deds = sal ? sal.deductions.reduce((s, d) => s + d.amount, 0) : 0;
+    const salDeds = sal ? sal.deductions.reduce((s, d) => s + d.amount, 0) : 0;
+    const advDeds = deductions.filter((d) => d.employee.name === emp.name && d.reason === "Advance").reduce((s, d) => s + d.amount, 0);
+    const totalDeds = salDeds + advDeds;
     const advInfo = getAdvanceInfo(emp.id);
-    return { ...emp, salary: sal?.amount || 0, deductions: deds, balance: (sal?.amount || 0) - deds, advanceOutstanding: advInfo.outstanding };
+    return { ...emp, salary: sal?.amount || 0, deductions: totalDeds, balance: (sal?.amount || 0) - totalDeds, advanceOutstanding: advInfo.outstanding };
   });
 
   const selectedDedEmp = employees.find((e) => e.id === dedForm.employeeId);
@@ -315,21 +347,21 @@ export default function EmployeesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Employees</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage employees, salaries, deductions, and advances</p>
+        <div className="flex items-center gap-4">
+          <h1 className="text-xl font-bold">Employees</h1>
+          <p className="text-sm text-muted-foreground hidden sm:block">Salaries, deductions & advances</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Select value={filterMonth} onValueChange={(v: string | null) => setFilterMonth(v || currentMonth.toString())}>
-            <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[120px] h-8 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
               {MONTHS.map((m, i) => <SelectItem key={i} value={(i + 1).toString()} label={m}>{m}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={filterYear} onValueChange={(v: string | null) => setFilterYear(v || currentYear.toString())}>
-            <SelectTrigger className="w-[100px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[85px] h-8 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
               {years.map((y) => <SelectItem key={y} value={y} label={y}>{y}</SelectItem>)}
             </SelectContent>
@@ -356,45 +388,37 @@ export default function EmployeesPage() {
             {overviewData.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">No active employees</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left">
-                      <th className="pb-3 font-medium text-muted-foreground">Employee</th>
-                      <th className="pb-3 font-medium text-muted-foreground">Role</th>
-                      <th className="pb-3 font-medium text-muted-foreground text-right">Salary</th>
-                      <th className="pb-3 font-medium text-muted-foreground text-right">Deductions</th>
-                      <th className="pb-3 font-medium text-muted-foreground text-right">Net Pay</th>
-                      <th className="pb-3 font-medium text-muted-foreground text-right">Advance Due</th>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left">
+                    <th className="pb-2 font-medium text-muted-foreground">Employee</th>
+                    <th className="pb-2 font-medium text-muted-foreground">Role</th>
+                    <th className="pb-2 font-medium text-muted-foreground text-right">Salary</th>
+                    <th className="pb-2 font-medium text-muted-foreground text-right">Advance Due</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overviewData.map((emp) => (
+                    <tr key={emp.id} className="border-b border-border/50">
+                      <td className="py-2 font-medium">{emp.name}</td>
+                      <td className="py-2 text-muted-foreground">{emp.role || "—"}</td>
+                      <td className="py-2 text-right">{emp.salary > 0 ? formatINR(emp.salary) : <span className="text-muted-foreground">Not set</span>}</td>
+                      <td className="py-2 text-right">
+                        {emp.advanceOutstanding > 0 ? (
+                          <span className="text-amber-400 font-medium">{formatINR(Math.round(emp.advanceOutstanding))}</span>
+                        ) : "—"}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {overviewData.map((emp) => (
-                      <tr key={emp.id} className="border-b border-border/50">
-                        <td className="py-3 font-medium">{emp.name}</td>
-                        <td className="py-3 text-muted-foreground">{emp.role || "—"}</td>
-                        <td className="py-3 text-right">{emp.salary > 0 ? formatINR(emp.salary) : <span className="text-muted-foreground">Not set</span>}</td>
-                        <td className="py-3 text-right text-red-400">{emp.deductions > 0 ? formatINR(emp.deductions) : "—"}</td>
-                        <td className="py-3 text-right font-semibold text-primary">{emp.salary > 0 ? formatINR(emp.balance) : "—"}</td>
-                        <td className="py-3 text-right">
-                          {emp.advanceOutstanding > 0 ? (
-                            <span className="text-amber-400 font-medium">{formatINR(Math.round(emp.advanceOutstanding))}</span>
-                          ) : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="font-semibold">
-                      <td className="pt-3" colSpan={2}>Total</td>
-                      <td className="pt-3 text-right">{formatINR(overviewData.reduce((s, e) => s + e.salary, 0))}</td>
-                      <td className="pt-3 text-right text-red-400">{formatINR(overviewData.reduce((s, e) => s + e.deductions, 0))}</td>
-                      <td className="pt-3 text-right text-primary">{formatINR(overviewData.reduce((s, e) => s + e.balance, 0))}</td>
-                      <td className="pt-3 text-right text-amber-400">{formatINR(Math.round(overviewData.reduce((s, e) => s + e.advanceOutstanding, 0)))}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="font-semibold">
+                    <td className="pt-2" colSpan={2}>Total</td>
+                    <td className="pt-2 text-right">{formatINR(overviewData.reduce((s, e) => s + e.salary, 0))}</td>
+                    <td className="pt-2 text-right text-amber-400">{formatINR(Math.round(overviewData.reduce((s, e) => s + e.advanceOutstanding, 0)))}</td>
+                  </tr>
+                </tfoot>
+              </table>
             )}
           </CardContent>
         </Card>
@@ -628,7 +652,10 @@ export default function EmployeesPage() {
                           </div>
                           <div className="flex items-center gap-4">
                             <p className="text-lg font-semibold text-amber-400">{formatINR(adv.amount)}</p>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" onClick={() => deleteAdv(adv)}><Trash2 className="w-4 h-4" /></Button>
+                            <div className="flex gap-1">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-blue-400" onClick={() => printAdvanceStatement(adv)} title="Print Statement"><Printer className="w-4 h-4" /></Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" onClick={() => deleteAdv(adv)}><Trash2 className="w-4 h-4" /></Button>
+                            </div>
                           </div>
                         </div>
                       </CardContent>

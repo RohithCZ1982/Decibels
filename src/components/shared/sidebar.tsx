@@ -17,8 +17,11 @@ import {
   ChevronRight,
   Volume2,
   UserCheck,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { useState } from "react";
+import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 
 const navigation = [
@@ -37,6 +40,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user, logout, isAdmin } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   const filteredNav = navigation.filter((item) => !item.adminOnly || isAdmin);
 
@@ -83,10 +87,28 @@ export function Sidebar() {
 
       <div className="border-t border-border p-2">
         {!collapsed && user && (
-          <div className="px-3 py-2 mb-1">
-            <p className="text-sm font-medium truncate">{user.name}</p>
-            <p className="text-xs text-muted-foreground">{user.role}</p>
+          <div className="flex items-center justify-between px-3 py-2 mb-1">
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{user.name}</p>
+              <p className="text-xs text-muted-foreground">{user.role}</p>
+            </div>
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="flex items-center justify-center w-8 h-8 rounded-lg border border-border hover:bg-accent transition-colors shrink-0"
+              title={theme === "dark" ? "Light mode" : "Dark mode"}
+            >
+              {theme === "dark" ? <Sun className="w-3.5 h-3.5 text-muted-foreground" /> : <Moon className="w-3.5 h-3.5 text-muted-foreground" />}
+            </button>
           </div>
+        )}
+        {collapsed && (
+          <button
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="flex items-center justify-center w-full py-2.5 rounded-lg text-muted-foreground hover:bg-accent transition-colors mb-0.5"
+            title={theme === "dark" ? "Light mode" : "Dark mode"}
+          >
+            {theme === "dark" ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
+          </button>
         )}
         <button
           onClick={logout}

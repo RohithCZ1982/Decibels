@@ -9,12 +9,20 @@ export async function GET(request: NextRequest) {
     const salaryId = searchParams.get("salaryId");
     const month = searchParams.get("month");
     const year = searchParams.get("year");
+    const all = searchParams.get("all");
 
     const where: Record<string, unknown> = {};
     if (employeeId) where.employeeId = employeeId;
     if (salaryId) where.salaryId = salaryId;
-    if (month && year) {
-      where.salary = { month: parseInt(month), year: parseInt(year) };
+    if (month && year && !salaryId && !all) {
+      const m = parseInt(month);
+      const y = parseInt(year);
+      const monthStart = new Date(y, m - 1, 1);
+      const monthEnd = new Date(y, m, 1);
+      where.OR = [
+        { salary: { month: m, year: y } },
+        { salaryId: null, date: { gte: monthStart, lt: monthEnd } },
+      ];
     }
 
     const deductions = await prisma.salaryDeduction.findMany({
