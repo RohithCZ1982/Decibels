@@ -529,6 +529,9 @@ function drawQuotationPage(
         data.cell.styles.textColor = [255, 255, 255] as [number, number, number];
         data.cell.styles.fillColor = [PINK[0], PINK[1], PINK[2]] as [number, number, number];
       }
+      if (rt === "item" && data.column.index === 1) {
+        data.cell.styles.fontStyle = "bold";
+      }
       if (rt === "catHeader") {
         data.cell.styles.fontStyle = "bold";
         data.cell.styles.textColor = PINK;

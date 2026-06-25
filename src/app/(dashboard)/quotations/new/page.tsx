@@ -53,7 +53,6 @@ export default function NewQuotationPage() {
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [lineItems, setLineItems] = useState<LineItem[]>([emptyLineItem()]);
-  const [discount, setDiscount] = useState("0");
   const [includeGst, setIncludeGst] = useState(true);
   const [enableRoundOff, setEnableRoundOff] = useState(false);
   const [notes, setNotes] = useState("");
@@ -109,8 +108,8 @@ export default function NewQuotationPage() {
     }
   };
 
-  const disc = parseFloat(discount) || 0;
   const validItems = lineItems.filter((li) => li.name && li.unitPrice > 0);
+  const disc = validItems.reduce((sum, li) => sum + li.quantity * li.unitPrice * ((li.discount || 0) / 100), 0);
   const calc = calculateQuotationTotals({
     items: validItems,
     discount: disc,
@@ -386,15 +385,12 @@ export default function NewQuotationPage() {
             {!includeGst && (
               <div className="text-sm text-muted-foreground">GST: Not Applicable</div>
             )}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground flex-1">Discount</span>
-              <Input
-                type="number"
-                className="w-32 h-8 text-right"
-                value={discount}
-                onChange={(e) => setDiscount(e.target.value)}
-              />
-            </div>
+            {disc > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Discount</span>
+                <span>-{formatINR(disc)}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <Label htmlFor="round-off" className="text-sm text-muted-foreground cursor-pointer">Round to nearest ₹100</Label>
               <Switch id="round-off" checked={enableRoundOff} onCheckedChange={setEnableRoundOff} />

@@ -144,11 +144,12 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
           </Button>
         </div>
       </div>
-      <div className="grid grid-cols-[1fr_60px_100px_60px_60px_100px_36px_40px] gap-2 text-xs font-medium text-muted-foreground px-1">
+      <div className="grid grid-cols-[1fr_60px_100px_55px_80px_55px_100px_36px_40px] gap-2 text-xs font-medium text-muted-foreground px-1">
         <span>Item Name</span>
         <span>Qty</span>
         <span>Unit Price</span>
         <span>Disc %</span>
+        <span>Disc Amt</span>
         <span>GST %</span>
         <span>Total</span>
         <span></span>
@@ -156,7 +157,7 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
       </div>
       {lineItems.map((li, idx) => (
         <div key={li.key} className="space-y-1">
-          <div className="grid grid-cols-[1fr_60px_100px_60px_60px_100px_36px_40px] gap-2 items-start">
+          <div className="grid grid-cols-[1fr_60px_100px_55px_80px_55px_100px_36px_40px] gap-2 items-start">
             <div className="relative">
               <Input
                 placeholder="Type to search items..."
@@ -219,6 +220,9 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
               onChange={(e) => updateLineItem(idx, "discount", parseFloat(e.target.value) || 0)}
               className="text-center"
             />
+            <div className="h-9 flex items-center px-2 bg-muted/50 rounded-md text-xs text-muted-foreground">
+              {(li.discount || 0) > 0 ? formatINR(li.quantity * li.unitPrice * (li.discount || 0) / 100) : "—"}
+            </div>
             <Input
               type="number"
               value={li.gstRate || ""}

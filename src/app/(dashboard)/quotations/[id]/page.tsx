@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, use } from "react";
+import { useEffect, useState, useCallback, useRef, use } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -164,10 +164,11 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
   // Edit mode state
   const [editing, setEditing] = useState(false);
   const [editItems, setEditItems] = useState<LineItem[]>([]);
-  const [editDiscount, setEditDiscount] = useState("0");
   const [editIncludeGst, setEditIncludeGst] = useState(true);
   const [editEnableRoundOff, setEditEnableRoundOff] = useState(false);
   const [editBillDate, setEditBillDate] = useState("");
+  const [editDiscountAdj, setEditDiscountAdj] = useState(0);
+  const [editDiscountInput, setEditDiscountInput] = useState("");
   const [allCatalogItems, setAllCatalogItems] = useState<CatalogItem[]>([]);
 
   const load = useCallback(async () => {
@@ -179,6 +180,19 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  const prevAutoDiscRef = useRef(0);
+  useEffect(() => {
+    if (!editing) return;
+    const autoDisc = editItems
+      .filter((li) => li.name && li.unitPrice > 0)
+      .reduce((sum, li) => sum + li.quantity * li.unitPrice * ((li.discount || 0) / 100), 0);
+    const diff = autoDisc - prevAutoDiscRef.current;
+    if (diff !== 0) {
+      prevAutoDiscRef.current = autoDisc;
+      setEditDiscountInput((prev) => Math.round((parseFloat(prev) || 0) + diff).toString());
+    }
+  }, [editing, editItems]);
 
   const startEditing = async () => {
     if (!quotation) return;
@@ -202,7 +216,11 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
         division: (item.division as "HOME_THEATER" | "ACOUSTICS") || "HOME_THEATER",
       }))
     );
-    setEditDiscount(quotation.discount.toString());
+    const itemAutoDisc = quotation.items.reduce((sum, item) => sum + item.quantity * item.unitPrice * ((item.discount || 0) / 100), 0);
+    const adj = Math.max(0, quotation.discount - itemAutoDisc);
+    setEditDiscountAdj(adj);
+    setEditDiscountInput(Math.round(itemAutoDisc + adj).toString());
+    prevAutoDiscRef.current = itemAutoDisc;
     setEditIncludeGst(quotation.includeGst);
     setEditEnableRoundOff(quotation.roundOff !== 0);
     setEditBillDate(quotation.billDate ? new Date(quotation.billDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
@@ -237,7 +255,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
           notes: li.notes,
           division: li.division || "HOME_THEATER",
         })),
-        discount: parseFloat(editDiscount) || 0,
+        discount: editDisc,
         includeGst: editIncludeGst,
         enableRoundOff: editEnableRoundOff,
         billDate: editBillDate,
@@ -427,10 +445,12 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
   const canEdit = EDITABLE_STATUSES.includes(quotation.status);
 
   // Edit mode calculations
-  const editDisc = parseFloat(editDiscount) || 0;
+  const editValidItems = editItems.filter((li) => li.name && li.unitPrice > 0);
+  const editAutoDisc = editValidItems.reduce((sum, li) => sum + li.quantity * li.unitPrice * ((li.discount || 0) / 100), 0);
+  const editDisc = parseFloat(editDiscountInput) || 0;
   const editCalc = editing
     ? calculateQuotationTotals({
-        items: editItems.filter((li) => li.name && li.unitPrice > 0),
+        items: editValidItems,
         discount: editDisc,
         includeGst: editIncludeGst,
         roundOff: editEnableRoundOff,
@@ -571,16 +591,18 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
                   <div className="text-muted-foreground">GST: Not Applicable</div>
                 )}
                 <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground flex-1">Discount</span>
-                  <Input type="number" className="w-28 h-7 text-right text-sm" value={editDiscount} onChange={(e) => setEditDiscount(e.target.value)} />
+                  <span className="text-muted-foreground flex-1 text-sm">Discount</span>
+                  <Input
+                    type="number"
+                    className="w-28 h-7 text-right text-sm"
+                    value={editDiscountInput}
+                    onChange={(e) => setEditDiscountInput(e.target.value)}
+                    onBlur={() => {
+                      const val = parseFloat(editDiscountInput) || 0;
+                      setEditDiscountAdj(Math.max(0, val - editAutoDisc));
+                    }}
+                  />
                 </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="edit-round" className="text-sm text-muted-foreground cursor-pointer">Round to ₹100</Label>
-                  <Switch id="edit-round" checked={editEnableRoundOff} onCheckedChange={setEditEnableRoundOff} />
-                </div>
-                {editEnableRoundOff && editCalc.roundOff !== 0 && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">Round Off</span><span>{editCalc.roundOff > 0 ? "+" : ""}{formatINR(editCalc.roundOff)}</span></div>
-                )}
                 <Separator />
                 <div className="flex justify-between font-bold text-base"><span>Grand Total</span><span className="text-primary">{formatINR(editCalc.grandTotal)}</span></div>
                 <div className="space-y-2 pt-2">
