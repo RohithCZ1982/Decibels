@@ -59,6 +59,7 @@ model Category {
   name          String        @unique
   hsnCode       String?
   order         Int           @default(0)
+  division      String        @default("HOME_THEATER")
   items         Item[]
   subCategories SubCategory[]
 }
@@ -99,6 +100,7 @@ model Item {
   supplier String?
   imageUrl String?
   active   Boolean @default(true)
+  division String  @default("HOME_THEATER")
 
   category      Category     @relation(fields: [categoryId], references: [id])
   categoryId    String
@@ -210,6 +212,7 @@ model QuotationItem {
   total       Float
   notes       String?
   sortOrder   Int     @default(0)
+  division    String  @default("HOME_THEATER")
 
   quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   quotationId String

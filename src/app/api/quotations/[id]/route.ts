@@ -61,7 +61,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             terms,
             validUntil: validUntil ? new Date(validUntil) : undefined,
             items: {
-              create: items.map((item: { name: string; description?: string; hsnCode?: string; quantity: number; unit?: string; unitPrice: number; discount?: number; gstRate?: number; itemId?: string; notes?: string }, idx: number) => ({
+              create: items.map((item: { name: string; description?: string; hsnCode?: string; quantity: number; unit?: string; unitPrice: number; discount?: number; gstRate?: number; itemId?: string; notes?: string; division?: string }, idx: number) => ({
                 name: item.name,
                 description: item.description || null,
                 hsnCode: item.hsnCode || null,
@@ -74,6 +74,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 itemId: item.itemId || null,
                 notes: item.notes || null,
                 sortOrder: idx,
+                division: item.division || "HOME_THEATER",
               })),
             },
           },

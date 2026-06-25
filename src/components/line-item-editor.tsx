@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 
+export type Division = "HOME_THEATER" | "ACOUSTICS";
+
 export interface LineItem {
   key: string;
   name: string;
@@ -17,6 +19,7 @@ export interface LineItem {
   gstRate: number;
   itemId: string | null;
   notes: string;
+  division: Division;
 }
 
 export interface CatalogItem {
@@ -29,6 +32,7 @@ export interface CatalogItem {
   unitPrice: number;
   unit?: string;
   brand?: string | null;
+  division?: string;
   category: { name: string };
   subCategory?: { name: string } | null;
 }
@@ -38,8 +42,8 @@ export function nextLineItemKey() {
   return `li-${++keyCounter}`;
 }
 
-export function emptyLineItem(): LineItem {
-  return { key: nextLineItemKey(), name: "", description: "", hsnCode: "", quantity: 1, unit: "No", unitPrice: 0, discount: 0, gstRate: 18, itemId: null, notes: "" };
+export function emptyLineItem(division: Division = "HOME_THEATER"): LineItem {
+  return { key: nextLineItemKey(), name: "", description: "", hsnCode: "", quantity: 1, unit: "No", unitPrice: 0, discount: 0, gstRate: 18, itemId: null, notes: "", division };
 }
 
 function formatINR(n: number) {
@@ -55,9 +59,10 @@ interface LineItemEditorProps {
 export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEditorProps) {
   const [activeAutocomplete, setActiveAutocomplete] = useState<number | null>(null);
   const [itemSearchValues, setItemSearchValues] = useState<Record<number, string>>({});
+  const [newItemDivision, setNewItemDivision] = useState<Division>("HOME_THEATER");
 
   const addLineItem = () => {
-    setLineItems([...lineItems, emptyLineItem()]);
+    setLineItems([...lineItems, emptyLineItem(newItemDivision)]);
   };
 
   const removeLineItem = (idx: number) => {
@@ -91,17 +96,19 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
       gstRate: item.gstRate,
       unit: item.unit || "No",
       itemId: item.id,
+      division: (item.division as Division) || "HOME_THEATER",
     };
     setLineItems(updated);
     setActiveAutocomplete(null);
     setItemSearchValues({});
   };
 
-  const getFilteredItems = (searchVal: string) => {
+  const getFilteredItems = (searchVal: string, division: Division) => {
     if (searchVal.length < 1) return [];
     const lower = searchVal.toLowerCase();
     return allItems.filter(
-      (item) => item.name.toLowerCase().includes(lower) || item.code.toLowerCase().includes(lower)
+      (item) => (item.division || "HOME_THEATER") === division &&
+        (item.name.toLowerCase().includes(lower) || item.code.toLowerCase().includes(lower))
     ).slice(0, 8);
   };
 
@@ -109,11 +116,36 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-2">
         <span className="text-base font-semibold">Line Items</span>
-        <Button variant="outline" size="sm" onClick={addLineItem}>
-          <Plus className="w-4 h-4 mr-1" /> Add Item
-        </Button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="radio"
+                name="newItemDivision"
+                checked={newItemDivision === "HOME_THEATER"}
+                onChange={() => setNewItemDivision("HOME_THEATER")}
+                className="accent-primary"
+              />
+              <span className="text-sm font-medium">Home Theater</span>
+            </label>
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="radio"
+                name="newItemDivision"
+                checked={newItemDivision === "ACOUSTICS"}
+                onChange={() => setNewItemDivision("ACOUSTICS")}
+                className="accent-primary"
+              />
+              <span className="text-sm font-medium">Acoustics</span>
+            </label>
+          </div>
+          <Button variant="outline" size="sm" onClick={addLineItem}>
+            <Plus className="w-4 h-4 mr-1" /> Add Item
+          </Button>
+        </div>
       </div>
-      <div className="grid grid-cols-[1fr_60px_100px_60px_60px_100px_36px_40px] gap-2 text-xs font-medium text-muted-foreground px-1">
+      <div className="grid grid-cols-[80px_1fr_60px_100px_60px_60px_100px_36px_40px] gap-2 text-xs font-medium text-muted-foreground px-1">
+        <span>Division</span>
         <span>Item Name</span>
         <span>Qty</span>
         <span>Unit Price</span>
@@ -125,7 +157,29 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
       </div>
       {lineItems.map((li, idx) => (
         <div key={li.key} className="space-y-1">
-          <div className="grid grid-cols-[1fr_60px_100px_60px_60px_100px_36px_40px] gap-2 items-start">
+          <div className="grid grid-cols-[80px_1fr_60px_100px_60px_60px_100px_36px_40px] gap-2 items-start">
+            <div className="flex flex-col gap-0.5 pt-1">
+              <label className="flex items-center gap-1 cursor-pointer">
+                <input
+                  type="radio"
+                  name={`division-${li.key}`}
+                  checked={li.division === "HOME_THEATER"}
+                  onChange={() => updateLineItem(idx, "division", "HOME_THEATER")}
+                  className="accent-primary w-3 h-3"
+                />
+                <span className="text-[10px]">HT</span>
+              </label>
+              <label className="flex items-center gap-1 cursor-pointer">
+                <input
+                  type="radio"
+                  name={`division-${li.key}`}
+                  checked={li.division === "ACOUSTICS"}
+                  onChange={() => updateLineItem(idx, "division", "ACOUSTICS")}
+                  className="accent-primary w-3 h-3"
+                />
+                <span className="text-[10px]">AC</span>
+              </label>
+            </div>
             <div className="relative">
               <Input
                 placeholder="Type to search items..."
@@ -142,9 +196,9 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
                 onFocus={() => setActiveAutocomplete(idx)}
                 onBlur={() => setTimeout(() => setActiveAutocomplete(null), 200)}
               />
-              {activeAutocomplete === idx && getFilteredItems(itemSearchValues[idx] ?? li.name).length > 0 && (
+              {activeAutocomplete === idx && getFilteredItems(itemSearchValues[idx] ?? li.name, li.division).length > 0 && (
                 <div className="absolute z-50 w-full mt-1 border rounded-lg bg-popover shadow-xl max-h-60 overflow-y-auto">
-                  {getFilteredItems(itemSearchValues[idx] ?? li.name).map((item) => (
+                  {getFilteredItems(itemSearchValues[idx] ?? li.name, li.division).map((item) => (
                     <button
                       key={item.id}
                       className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent border-b border-border/30 last:border-0"

@@ -82,6 +82,7 @@ interface QuotationDetail {
     gstRate: number;
     total: number;
     notes: string | null;
+    division: string;
     item: { code: string; description: string | null; category: { name: string } } | null;
   }>;
   payments: Array<{
@@ -189,6 +190,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
         gstRate: item.gstRate,
         itemId: item.item ? undefined as unknown as string : null,
         notes: item.notes || "",
+        division: (item.division as "HOME_THEATER" | "ACOUSTICS") || "HOME_THEATER",
       }))
     );
     setEditDiscount(quotation.discount.toString());
@@ -224,6 +226,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
           gstRate: li.gstRate,
           itemId: li.itemId,
           notes: li.notes,
+          division: li.division || "HOME_THEATER",
         })),
         discount: parseFloat(editDiscount) || 0,
         includeGst: editIncludeGst,
@@ -662,24 +665,54 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
                   </tr>
                 </thead>
                 <tbody>
-                  {quotation.items.map((item, idx) => (
-                    <tr key={item.id} className="border-b border-border/50">
-                      <td className="py-2.5 pr-4 text-muted-foreground">{idx + 1}</td>
-                      <td className="py-2.5 pr-4">
-                        <p className="font-medium">{item.name}</p>
-                        {item.item && (
-                          <p className="text-xs text-muted-foreground">{item.item.code} &bull; {item.item.category?.name}</p>
-                        )}
-                        {item.notes && <p className="text-xs text-muted-foreground mt-0.5">{item.notes}</p>}
-                      </td>
-                      <td className="py-2.5 pr-4 text-xs text-muted-foreground">{item.hsnCode || "—"}</td>
-                      <td className="py-2.5 pr-4 text-right">{item.quantity}</td>
-                      <td className="py-2.5 pr-4 text-right">{formatINR(item.unitPrice)}</td>
-                      <td className="py-2.5 pr-4 text-right text-muted-foreground">{item.discount ? `${item.discount}%` : "—"}</td>
-                      <td className="py-2.5 pr-4 text-right text-muted-foreground">{item.gstRate}%</td>
-                      <td className="py-2.5 text-right font-medium">{formatINR(item.total)}</td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    const divLabels: Record<string, string> = { HOME_THEATER: "Home Theater", ACOUSTICS: "Acoustics" };
+                    const divOrder = ["HOME_THEATER", "ACOUSTICS"];
+                    const divGroups = new Map<string, typeof quotation.items>();
+                    for (const item of quotation.items) {
+                      const div = item.division || "HOME_THEATER";
+                      if (!divGroups.has(div)) divGroups.set(div, []);
+                      divGroups.get(div)!.push(item);
+                    }
+                    const activeDivs = divOrder.filter((d) => divGroups.has(d));
+                    let serial = 0;
+
+                    return activeDivs.flatMap((div) => {
+                      const items = divGroups.get(div)!;
+                      const rows = [];
+                      if (activeDivs.length > 1) {
+                        rows.push(
+                          <tr key={`div-${div}`} className="bg-primary/10">
+                            <td colSpan={8} className="py-2 px-4 font-semibold text-primary">
+                              {divLabels[div] || div}
+                            </td>
+                          </tr>
+                        );
+                      }
+                      for (const item of items) {
+                        serial++;
+                        rows.push(
+                          <tr key={item.id} className="border-b border-border/50">
+                            <td className="py-2.5 pr-4 text-muted-foreground">{serial}</td>
+                            <td className="py-2.5 pr-4">
+                              <p className="font-medium">{item.name}</p>
+                              {item.item && (
+                                <p className="text-xs text-muted-foreground">{item.item.code} &bull; {item.item.category?.name}</p>
+                              )}
+                              {item.notes && <p className="text-xs text-muted-foreground mt-0.5">{item.notes}</p>}
+                            </td>
+                            <td className="py-2.5 pr-4 text-xs text-muted-foreground">{item.hsnCode || "—"}</td>
+                            <td className="py-2.5 pr-4 text-right">{item.quantity}</td>
+                            <td className="py-2.5 pr-4 text-right">{formatINR(item.unitPrice)}</td>
+                            <td className="py-2.5 pr-4 text-right text-muted-foreground">{item.discount ? `${item.discount}%` : "—"}</td>
+                            <td className="py-2.5 pr-4 text-right text-muted-foreground">{item.gstRate}%</td>
+                            <td className="py-2.5 text-right font-medium">{formatINR(item.total)}</td>
+                          </tr>
+                        );
+                      }
+                      return rows;
+                    });
+                  })()}
                 </tbody>
               </table>
             </div>

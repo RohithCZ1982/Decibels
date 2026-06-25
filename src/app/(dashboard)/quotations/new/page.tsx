@@ -103,6 +103,7 @@ export default function NewQuotationPage() {
           gstRate: ti.item.gstRate,
           itemId: ti.item.id,
           notes: "",
+          division: (ti.item.division as "HOME_THEATER" | "ACOUSTICS") || "HOME_THEATER",
         }))
       );
     }
@@ -174,6 +175,7 @@ export default function NewQuotationPage() {
           gstRate: li.gstRate,
           itemId: li.itemId,
           notes: li.notes,
+          division: li.division || "HOME_THEATER",
         })),
         discount: disc,
         notes,

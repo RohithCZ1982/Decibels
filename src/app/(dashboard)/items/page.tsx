@@ -36,6 +36,7 @@ interface Category {
   id: string;
   name: string;
   hsnCode: string | null;
+  division: string;
   _count?: { items: number };
   subCategories?: SubCategory[];
 }
@@ -60,6 +61,7 @@ interface Item {
   supplier: string | null;
   imageUrl: string | null;
   active: boolean;
+  division: string;
   category: Category;
   categoryId: string;
   subCategory: SubCategory | null;
@@ -104,6 +106,7 @@ const emptyForm = {
   manageStock: false,
   alertQuantity: "0",
   imageUrl: "",
+  division: "HOME_THEATER",
 };
 
 function formatINR(amount: number) {
@@ -114,6 +117,7 @@ export default function ItemsPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState("");
+  const [selectedDivision, setSelectedDivision] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedSubCategory, setSelectedSubCategory] = useState<string>("all");
   const [selectedBrand, setSelectedBrand] = useState<string>("all");
@@ -148,13 +152,16 @@ export default function ItemsPage() {
 
   const brands = Array.from(new Set(items.map((i) => i.brand).filter(Boolean))) as string[];
 
+  const filterCategories = selectedDivision === "all" ? categories : categories.filter((c) => c.division === selectedDivision);
   const filterSubCategories = categories.find((c) => c.id === selectedCategory)?.subCategories || [];
 
+  const formCategories = categories.filter((c) => c.division === form.division);
   const formSubCategories = categories.find((c) => c.id === form.categoryId)?.subCategories || [];
 
   const loadData = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams({ search, page: page.toString(), limit: "20" });
+    if (selectedDivision && selectedDivision !== "all") params.set("division", selectedDivision);
     if (selectedCategory && selectedCategory !== "all") params.set("categoryId", selectedCategory);
     if (selectedSubCategory && selectedSubCategory !== "all") params.set("subCategoryId", selectedSubCategory);
     if (selectedBrand && selectedBrand !== "all") params.set("brand", selectedBrand);
@@ -171,7 +178,7 @@ export default function ItemsPage() {
     setTotalItems(itemsData.total || 0);
     setCategories(catsData);
     setLoading(false);
-  }, [search, selectedCategory, selectedSubCategory, selectedBrand, page]);
+  }, [search, selectedDivision, selectedCategory, selectedSubCategory, selectedBrand, page]);
 
   useEffect(() => {
     loadData();
@@ -216,6 +223,7 @@ export default function ItemsPage() {
       manageStock: item.manageStock,
       alertQuantity: item.alertQuantity.toString(),
       imageUrl: item.imageUrl || "",
+      division: item.division || "HOME_THEATER",
     });
     setDialogOpen(true);
   };
@@ -232,7 +240,7 @@ export default function ItemsPage() {
       const catRes = await fetch("/api/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newCategory, hsnCode: newCategoryHsn || null }),
+        body: JSON.stringify({ name: newCategory, hsnCode: newCategoryHsn || null, division: form.division }),
       });
       if (!catRes.ok) {
         toast.error("Failed to create category");
@@ -364,6 +372,31 @@ export default function ItemsPage() {
               {/* Left Column */}
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Basic Info</h3>
+                <div className="space-y-1">
+                  <Label>Division</Label>
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="itemDivision"
+                        checked={form.division === "HOME_THEATER"}
+                        onChange={() => setForm({ ...form, division: "HOME_THEATER", categoryId: "", subCategoryId: "" })}
+                        className="accent-primary"
+                      />
+                      <span className="text-sm">Home Theater</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="itemDivision"
+                        checked={form.division === "ACOUSTICS"}
+                        onChange={() => setForm({ ...form, division: "ACOUSTICS", categoryId: "", subCategoryId: "" })}
+                        className="accent-primary"
+                      />
+                      <span className="text-sm">Acoustics</span>
+                    </label>
+                  </div>
+                </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label>Item Code *</Label>
@@ -395,16 +428,16 @@ export default function ItemsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label>Category *</Label>
-                    <Select key={`cat-${form.categoryId}`} value={form.categoryId} onValueChange={(v: string | null) => {
+                    <Select key={`cat-${form.categoryId}-${form.division}`} value={form.categoryId} onValueChange={(v: string | null) => {
                       const val = v || "";
-                      const cat = categories.find((c) => c.id === val);
+                      const cat = formCategories.find((c) => c.id === val);
                       setForm({ ...form, categoryId: val, subCategoryId: "", hsnCode: cat?.hsnCode || form.hsnCode });
                       setShowNewCategory(val === "__new__");
                       setShowNewSubCategory(false);
                     }}>
                       <SelectTrigger className="w-full"><SelectValue placeholder="Select category" /></SelectTrigger>
                       <SelectContent>
-                        {categories.map((c) => <SelectItem key={c.id} value={c.id} label={c.name}>{c.name}</SelectItem>)}
+                        {formCategories.map((c) => <SelectItem key={c.id} value={c.id} label={c.name}>{c.name}</SelectItem>)}
                         <SelectItem value="__new__" label="+ New Category">+ New Category</SelectItem>
                       </SelectContent>
                     </Select>
@@ -553,6 +586,21 @@ export default function ItemsPage() {
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />
         </div>
+        <Select value={selectedDivision} onValueChange={(v: string | null) => {
+          setSelectedDivision(v || "all");
+          setSelectedCategory("all");
+          setSelectedSubCategory("all");
+          setPage(1);
+        }}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="All Divisions" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all" label="All Divisions">All Divisions</SelectItem>
+            <SelectItem value="HOME_THEATER" label="Home Theater">Home Theater</SelectItem>
+            <SelectItem value="ACOUSTICS" label="Acoustics">Acoustics</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={selectedCategory} onValueChange={(v: string | null) => {
           setSelectedCategory(v || "all");
           setSelectedSubCategory("all");
@@ -563,7 +611,7 @@ export default function ItemsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all" label="All Categories">All Categories</SelectItem>
-            {categories.map((c) => (
+            {filterCategories.map((c) => (
               <SelectItem key={c.id} value={c.id} label={`${c.name} (${c._count?.items || 0})`}>
                 {c.name} ({c._count?.items || 0})
               </SelectItem>
@@ -640,6 +688,9 @@ export default function ItemsPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-3 mt-1 flex-wrap">
+                        <Badge variant={item.division === "ACOUSTICS" ? "default" : "secondary"} className="text-[10px]">
+                          {item.division === "ACOUSTICS" ? "AC" : "HT"}
+                        </Badge>
                         <Badge variant="secondary" className="text-[10px]">
                           {item.category.name}
                         </Badge>

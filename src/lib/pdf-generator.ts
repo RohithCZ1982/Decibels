@@ -39,6 +39,7 @@ interface QuotationData {
     gstRate?: number;
     total: number;
     notes: string | null;
+    division?: string;
     item?: { code: string; description?: string | null; category: { name: string } } | null;
   }>;
   payments?: Array<{
@@ -161,18 +162,31 @@ export async function generateItemListPDF(quotation: QuotationData) {
   doc.text(quotation.customer.name, ml + halfW + 2 + custLblW, y + 4.5);
   y += 10;
 
-  // Items table — Sl, Item, Description, Qty
-  const body: string[][] = [];
-  let sl = 1;
+  // Items table — Sl, Item, Description, Qty (grouped by division)
+  const ilDivLabels: Record<string, string> = { HOME_THEATER: "Home Theater", ACOUSTICS: "Acoustics" };
+  const ilDivOrder = ["HOME_THEATER", "ACOUSTICS"];
+  const ilDivGroups = new Map<string, typeof quotation.items>();
   for (const item of quotation.items) {
-    const desc = item.description || item.item?.description || item.notes || "";
-    body.push([
-      sl.toString(),
-      item.name,
-      desc,
-      item.quantity.toString(),
-    ]);
-    sl++;
+    const div = item.division || "HOME_THEATER";
+    if (!ilDivGroups.has(div)) ilDivGroups.set(div, []);
+    ilDivGroups.get(div)!.push(item);
+  }
+  const ilActiveDivs = ilDivOrder.filter((d) => ilDivGroups.has(d));
+
+  const body: string[][] = [];
+  const ilRowTypes: ("divHeader" | "item")[] = [];
+  let sl = 1;
+  for (const div of ilActiveDivs) {
+    if (ilActiveDivs.length > 1) {
+      body.push(["", ilDivLabels[div] || div, "", ""]);
+      ilRowTypes.push("divHeader");
+    }
+    for (const item of ilDivGroups.get(div)!) {
+      const desc = item.description || item.item?.description || item.notes || "";
+      body.push([sl.toString(), item.name, desc, item.quantity.toString()]);
+      ilRowTypes.push("item");
+      sl++;
+    }
   }
 
   autoTable(doc, {
@@ -202,6 +216,16 @@ export async function generateItemListPDF(quotation: QuotationData) {
       3: { cellWidth: 18, halign: "center" },
     },
     margin: { left: ml, right: ml },
+    didParseCell: (data) => {
+      if (data.section !== "body") return;
+      const rt = ilRowTypes[data.row.index];
+      if (rt === "divHeader") {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fontSize = 9;
+        data.cell.styles.textColor = [255, 255, 255] as [number, number, number];
+        data.cell.styles.fillColor = [PINK[0], PINK[1], PINK[2]] as [number, number, number];
+      }
+    },
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -356,55 +380,94 @@ function drawQuotationPage(
   doc.text(titleText, pw / 2, y + 5, { align: "center" });
   y += 11;
 
-  // --- ITEMS TABLE ---
-  const catOrder: string[] = [];
-  const catMap = new Map<string, typeof q.items>();
+  // --- ITEMS TABLE (grouped by Division then Category) ---
+  const divisionLabels: Record<string, string> = {
+    HOME_THEATER: "Home Theater",
+    ACOUSTICS: "Acoustics",
+  };
+  const divisionOrder = ["HOME_THEATER", "ACOUSTICS"];
+
+  const divGroups = new Map<string, typeof q.items>();
   for (const item of q.items) {
-    const cat = item.item?.category?.name || "Other";
-    if (!catMap.has(cat)) {
-      catMap.set(cat, []);
-      catOrder.push(cat);
-    }
-    catMap.get(cat)!.push(item);
+    const div = item.division || "HOME_THEATER";
+    if (!divGroups.has(div)) divGroups.set(div, []);
+    divGroups.get(div)!.push(item);
   }
 
-  const groups = catOrder.map((name) => {
-    const items = catMap.get(name)!;
-    return { name, items, subtotal: items.reduce((s, i) => s + i.total, 0) };
-  });
+  const activeDivisions = divisionOrder.filter((d) => divGroups.has(d));
 
   const tableBody: string[][] = [];
-  const tRowTypes: ("catHeader" | "item" | "subtotal")[] = [];
+  const tRowTypes: ("divHeader" | "catHeader" | "item" | "subtotal" | "divSubtotal")[] = [];
   let sl = 1;
 
   const hasAnyDiscount = q.items.some((item) => (item.discount || 0) > 0);
+  const colCount = hasAnyDiscount ? 8 : 7;
 
-  for (const group of groups) {
-    tableBody.push(hasAnyDiscount ? ["", group.name, "", "", "", "", "", ""] : ["", group.name, "", "", "", "", ""]);
-    tRowTypes.push("catHeader");
+  for (const div of activeDivisions) {
+    const divItems = divGroups.get(div)!;
 
-    for (const item of group.items) {
-      const desc = item.description || item.item?.description || item.notes;
-      const displayName = desc ? `${item.name}\n${desc}` : item.name;
-      const discPct = item.discount || 0;
-      const row = [
-        sl.toString(),
-        displayName,
-        item.hsnCode || "",
-        item.quantity.toString(),
-        item.unit || "No",
-        formatINR(item.unitPrice),
-      ];
-      if (hasAnyDiscount) row.push(discPct > 0 ? `${discPct}%` : "");
-      row.push(formatINR(item.total));
-      tableBody.push(row);
-      tRowTypes.push("item");
-      sl++;
+    if (activeDivisions.length > 1) {
+      const divRow = Array(colCount).fill("");
+      divRow[1] = divisionLabels[div] || div;
+      tableBody.push(divRow);
+      tRowTypes.push("divHeader");
     }
 
-    const subRow = hasAnyDiscount ? ["", "", "", "", "", "", "", formatINR(group.subtotal)] : ["", "", "", "", "", "", formatINR(group.subtotal)];
-    tableBody.push(subRow);
-    tRowTypes.push("subtotal");
+    const catOrder: string[] = [];
+    const catMap = new Map<string, typeof q.items>();
+    for (const item of divItems) {
+      const cat = item.item?.category?.name || "Other";
+      if (!catMap.has(cat)) {
+        catMap.set(cat, []);
+        catOrder.push(cat);
+      }
+      catMap.get(cat)!.push(item);
+    }
+
+    const groups = catOrder.map((name) => {
+      const items = catMap.get(name)!;
+      return { name, items, subtotal: items.reduce((s, i) => s + i.total, 0) };
+    });
+
+    for (const group of groups) {
+      const catRow = Array(colCount).fill("");
+      catRow[1] = group.name;
+      tableBody.push(catRow);
+      tRowTypes.push("catHeader");
+
+      for (const item of group.items) {
+        const desc = item.description || item.item?.description || item.notes;
+        const displayName = desc ? `${item.name}\n${desc}` : item.name;
+        const discPct = item.discount || 0;
+        const row = [
+          sl.toString(),
+          displayName,
+          item.hsnCode || "",
+          item.quantity.toString(),
+          item.unit || "No",
+          formatINR(item.unitPrice),
+        ];
+        if (hasAnyDiscount) row.push(discPct > 0 ? `${discPct}%` : "");
+        row.push(formatINR(item.total));
+        tableBody.push(row);
+        tRowTypes.push("item");
+        sl++;
+      }
+
+      const subRow = Array(colCount).fill("");
+      subRow[colCount - 1] = formatINR(group.subtotal);
+      tableBody.push(subRow);
+      tRowTypes.push("subtotal");
+    }
+
+    if (activeDivisions.length > 1) {
+      const divTotal = divItems.reduce((s, i) => s + i.total, 0);
+      const divSubRow = Array(colCount).fill("");
+      divSubRow[1] = `${divisionLabels[div] || div} Total`;
+      divSubRow[colCount - 1] = formatINR(divTotal);
+      tableBody.push(divSubRow);
+      tRowTypes.push("divSubtotal");
+    }
   }
 
   const headRow = ["Sl", "Product Description", "HSN", "Qty", "Unit", "Rate (₹)"];
@@ -457,6 +520,12 @@ function drawQuotationPage(
     didParseCell: (data) => {
       if (data.section !== "body") return;
       const rt = tRowTypes[data.row.index];
+      if (rt === "divHeader") {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fontSize = 9;
+        data.cell.styles.textColor = [255, 255, 255] as [number, number, number];
+        data.cell.styles.fillColor = [PINK[0], PINK[1], PINK[2]] as [number, number, number];
+      }
       if (rt === "catHeader") {
         data.cell.styles.fontStyle = "bold";
         data.cell.styles.textColor = PINK;
@@ -465,6 +534,12 @@ function drawQuotationPage(
       if (rt === "subtotal") {
         data.cell.styles.fontStyle = "bold";
         data.cell.styles.fillColor = [240, 240, 235] as [number, number, number];
+        data.cell.styles.textColor = PINK;
+      }
+      if (rt === "divSubtotal") {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fontSize = 9;
+        data.cell.styles.fillColor = [230, 230, 225] as [number, number, number];
         data.cell.styles.textColor = PINK;
       }
     },

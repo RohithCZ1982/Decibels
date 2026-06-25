@@ -23,7 +23,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       description, supplier, stock, imageUrl, active, hsnCode, gstRate,
       brand, unit, taxType, subCategoryId,
       purchasePrice, purchasePriceInclTax, profitMargin,
-      manageStock, alertQuantity,
+      manageStock, alertQuantity, division,
     } = body;
 
     const existing = await prisma.item.findUnique({ where: { id } });
@@ -57,6 +57,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         ...(profitMargin !== undefined && { profitMargin: profitMargin != null ? parseFloat(profitMargin) : null }),
         ...(manageStock !== undefined && { manageStock }),
         ...(alertQuantity !== undefined && { alertQuantity: alertQuantity ? parseInt(alertQuantity) : 0 }),
+        ...(division !== undefined && { division }),
       },
       include: { category: true, subCategory: true },
     });

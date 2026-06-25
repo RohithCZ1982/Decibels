@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
     const categoryId = searchParams.get("categoryId");
     const subCategoryId = searchParams.get("subCategoryId");
     const brand = searchParams.get("brand");
+    const division = searchParams.get("division");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "50");
     const all = searchParams.get("all") === "true";
@@ -25,6 +26,7 @@ export async function GET(request: NextRequest) {
     if (categoryId) where.categoryId = categoryId;
     if (subCategoryId) where.subCategoryId = subCategoryId;
     if (brand) where.brand = brand;
+    if (division) where.division = division;
 
     const include = { category: true, subCategory: true };
 
@@ -60,7 +62,7 @@ export async function POST(request: NextRequest) {
       description, supplier, stock, imageUrl, hsnCode, gstRate,
       brand, unit, taxType, subCategoryId,
       purchasePrice, purchasePriceInclTax, profitMargin,
-      manageStock, alertQuantity,
+      manageStock, alertQuantity, division,
     } = body;
 
     if (!code || !name || !categoryId || unitPrice == null) {
@@ -91,6 +93,7 @@ export async function POST(request: NextRequest) {
         profitMargin: profitMargin != null ? parseFloat(profitMargin) : null,
         manageStock: manageStock ?? false,
         alertQuantity: alertQuantity ? parseInt(alertQuantity) : 0,
+        division: division || "HOME_THEATER",
       },
       include: { category: true, subCategory: true },
     });
