@@ -226,7 +226,7 @@ export async function generateItemListPDF(quotation: QuotationData) {
         data.cell.styles.fontStyle = "bold";
         data.cell.styles.fontSize = 9;
         data.cell.styles.textColor = [255, 255, 255] as [number, number, number];
-        data.cell.styles.fillColor = [PINK[0], PINK[1], PINK[2]] as [number, number, number];
+        data.cell.styles.fillColor = [225, 100, 110] as [number, number, number];
       }
     },
   });
@@ -401,6 +401,7 @@ function drawQuotationPage(
 
   const tableBody: string[][] = [];
   const tRowTypes: ("divHeader" | "catHeader" | "item" | "subtotal" | "divSubtotal")[] = [];
+  const itemNameDesc: { name: string; desc: string }[] = [];
   let sl = 1;
 
   const hasAnyDiscount = q.items.some((item) => (item.discount || 0) > 0);
@@ -439,7 +440,7 @@ function drawQuotationPage(
       tRowTypes.push("catHeader");
 
       for (const item of group.items) {
-        const desc = item.description || item.item?.description || item.notes;
+        const desc = item.description || item.item?.description || item.notes || "";
         const displayName = desc ? `${item.name}\n${desc}` : item.name;
         const discPct = item.discount || 0;
         const row = [
@@ -454,6 +455,7 @@ function drawQuotationPage(
         row.push(formatINR(item.total));
         tableBody.push(row);
         tRowTypes.push("item");
+        itemNameDesc.push({ name: item.name, desc });
         sl++;
       }
 
@@ -527,10 +529,7 @@ function drawQuotationPage(
         data.cell.styles.fontStyle = "bold";
         data.cell.styles.fontSize = 9;
         data.cell.styles.textColor = [255, 255, 255] as [number, number, number];
-        data.cell.styles.fillColor = [PINK[0], PINK[1], PINK[2]] as [number, number, number];
-      }
-      if (rt === "item" && data.column.index === 1) {
-        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fillColor = [225, 100, 110] as [number, number, number];
       }
       if (rt === "catHeader") {
         data.cell.styles.fontStyle = "bold";
@@ -547,6 +546,28 @@ function drawQuotationPage(
         data.cell.styles.fontSize = 9;
         data.cell.styles.fillColor = [230, 230, 225] as [number, number, number];
         data.cell.styles.textColor = PINK;
+      }
+    },
+    didDrawCell: (data) => {
+      if (data.section !== "body") return;
+      const rt = tRowTypes[data.row.index];
+      if (rt === "item" && data.column.index === 1) {
+        let itemIdx = 0;
+        for (let i = 0; i < data.row.index; i++) {
+          if (tRowTypes[i] === "item") itemIdx++;
+        }
+        const nd = itemNameDesc[itemIdx];
+        if (!nd) return;
+        const padding = data.cell.styles.cellPadding as { top: number; left: number };
+        const x = data.cell.x + (padding?.left ?? 2);
+        const nameY = data.cell.y + (padding?.top ?? 2) + data.cell.styles.fontSize * 0.352;
+        doc.setFillColor(255, 255, 255);
+        doc.setFontSize(data.cell.styles.fontSize);
+        const nameW = doc.getTextWidth(nd.name) + 1;
+        doc.rect(x, data.cell.y + (padding?.top ?? 2) - 1, nameW, data.cell.styles.fontSize * 0.5, "F");
+        doc.setTextColor(...BLACK);
+        doc.setFont("Poppins", "bold");
+        doc.text(nd.name, x, nameY);
       }
     },
   });
