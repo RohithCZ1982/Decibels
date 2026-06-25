@@ -364,7 +364,7 @@ export default function ItemsPage() {
             {totalItems > 0 ? `${totalItems} products` : "Manage products, services, and equipment"}
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { if (open) setDialogOpen(true); }}>
           <DialogTrigger>
             <Button onClick={openNew}>
               <Plus className="w-4 h-4 mr-2" />

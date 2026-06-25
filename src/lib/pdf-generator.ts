@@ -103,8 +103,11 @@ export async function generateQuotationPDF(quotation: QuotationData) {
     drawPaymentsPage(doc, quotation, logoData, badgeData);
   }
 
-  doc.addPage();
-  drawTermsPage(doc);
+  const INVOICE_STATUSES = ["APPROVED", "IN_PRODUCTION", "COMPLETED", "CLOSED"];
+  if (quotation.status && INVOICE_STATUSES.includes(quotation.status)) {
+    doc.addPage();
+    drawTermsPage(doc);
+  }
 
   window.open(doc.output("bloburl"), "_blank");
 }
@@ -636,15 +639,17 @@ function drawQuotationPage(
   doc.text(q.includeGst !== false ? "GST included as detailed above." : "GST Not Applicable.", ml, y);
   y += 4;
 
-  doc.setFontSize(8);
-  doc.setFont("Poppins", "bold");
-  doc.setTextColor(...BLACK);
-  const termsRef = "Terms And Conditions are enclosed herewith Attachment 1.";
-  doc.text(termsRef, ml, y);
-  const tw = doc.getTextWidth(termsRef);
-  doc.setDrawColor(...BLACK);
-  doc.setLineWidth(0.3);
-  doc.line(ml, y + 0.8, ml + tw, y + 0.8);
+  if (isInvoice) {
+    doc.setFontSize(8);
+    doc.setFont("Poppins", "bold");
+    doc.setTextColor(...BLACK);
+    const termsRef = "Terms And Conditions are enclosed herewith Attachment 1.";
+    doc.text(termsRef, ml, y);
+    const tw = doc.getTextWidth(termsRef);
+    doc.setDrawColor(...BLACK);
+    doc.setLineWidth(0.3);
+    doc.line(ml, y + 0.8, ml + tw, y + 0.8);
+  }
 
   doc.setFontSize(9);
   doc.setFont("Poppins", "italic");
