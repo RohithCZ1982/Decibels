@@ -6,10 +6,10 @@ import { QuotationStatus } from "@/generated/prisma/client";
 const VALID_TRANSITIONS: Record<string, string[]> = {
   DRAFT: ["SENT"],
   SENT: ["APPROVED", "DRAFT"],
-  APPROVED: ["IN_PRODUCTION"],
-  IN_PRODUCTION: ["COMPLETED"],
-  COMPLETED: ["CLOSED"],
-  CLOSED: [],
+  APPROVED: ["IN_PRODUCTION", "SENT"],
+  IN_PRODUCTION: ["COMPLETED", "APPROVED"],
+  COMPLETED: ["CLOSED", "IN_PRODUCTION"],
+  CLOSED: ["COMPLETED"],
 };
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

@@ -43,6 +43,7 @@ import {
   Printer,
   Edit2,
   ClipboardList,
+  Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { generateQuotationPDF, generateItemListPDF } from "@/lib/pdf-generator";
@@ -127,6 +128,14 @@ const nextAction: Record<string, { status: string; label: string; icon: React.El
   APPROVED: { status: "IN_PRODUCTION", label: "Start Production", icon: Hammer },
   IN_PRODUCTION: { status: "COMPLETED", label: "Mark Completed", icon: PackageCheck },
   COMPLETED: { status: "CLOSED", label: "Close Project", icon: Lock },
+};
+
+const prevAction: Record<string, { status: string; label: string }> = {
+  SENT: { status: "DRAFT", label: "Back to Draft" },
+  APPROVED: { status: "SENT", label: "Back to Sent" },
+  IN_PRODUCTION: { status: "APPROVED", label: "Back to Approved" },
+  COMPLETED: { status: "IN_PRODUCTION", label: "Back to Production" },
+  CLOSED: { status: "COMPLETED", label: "Back to Completed" },
 };
 
 function formatINR(n: number) {
@@ -412,6 +421,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
   const totalPaid = quotation.payments.reduce((s, p) => s + p.amount, 0);
   const balance = quotation.grandTotal - totalPaid;
   const action = nextAction[quotation.status];
+  const prev = prevAction[quotation.status];
   const currentStatusIdx = statusFlow.findIndex((s) => s.key === quotation.status);
   const isInvoice = INVOICE_STATUSES.includes(quotation.status);
   const canEdit = EDITABLE_STATUSES.includes(quotation.status);
@@ -475,9 +485,13 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
               <Button variant="outline" onClick={handleDownloadPDF}>
                 <Download className="w-4 h-4 mr-2" /> PDF
               </Button>
-              {["IN_PRODUCTION", "COMPLETED", "CLOSED"].includes(quotation.status) && (
-                <Button variant="outline" onClick={handleItemListPDF}>
-                  <ClipboardList className="w-4 h-4 mr-2" /> Item List
+              <Button variant="outline" onClick={handleItemListPDF}>
+                <ClipboardList className="w-4 h-4 mr-2" /> Item List
+              </Button>
+              {prev && (
+                <Button variant="outline" onClick={() => updateStatus(prev.status)} disabled={saving}>
+                  <Undo2 className="w-4 h-4 mr-2" />
+                  {prev.label}
                 </Button>
               )}
               {action && (
