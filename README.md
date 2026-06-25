@@ -1,6 +1,6 @@
 # Decibels Audio - Business Management System
 
-A production-ready web application for **Decibels Audio Pvt Ltd**, managing home theater construction, quotations, payments, and project lifecycle.
+A production-ready web application for **Decibels Audio Syatems**, managing home theater construction, quotations, payments, and project lifecycle.
 
 ## Features
 

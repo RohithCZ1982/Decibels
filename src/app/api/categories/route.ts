@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const division = searchParams.get("division");
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { deleted: false };
     if (division) where.division = division;
 
     const categories = await prisma.category.findMany({
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
       orderBy: { order: "asc" },
       include: {
         _count: { select: { items: true } },
-        subCategories: { orderBy: { name: "asc" } },
+        subCategories: { where: { deleted: false }, orderBy: { name: "asc" }, include: { _count: { select: { items: true } } } },
       },
     });
     return jsonResponse(categories);

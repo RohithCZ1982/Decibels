@@ -117,8 +117,8 @@ export default function ItemsPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState("");
-  const [selectedDivision, setSelectedDivision] = useState<string>("all");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedDivision, setSelectedDivision] = useState<string>("HOME_THEATER");
+  const [selectedCategory, setSelectedCategory] = useState<string>("pending");
   const [selectedSubCategory, setSelectedSubCategory] = useState<string>("all");
   const [selectedBrand, setSelectedBrand] = useState<string>("all");
   const [loading, setLoading] = useState(true);
@@ -132,8 +132,6 @@ export default function ItemsPage() {
   const [newCategoryHsn, setNewCategoryHsn] = useState("");
   const [newSubCategoryHsn, setNewSubCategoryHsn] = useState("");
   const [showNewSubCategory, setShowNewSubCategory] = useState(false);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
   // Stock dialogs
@@ -160,9 +158,9 @@ export default function ItemsPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams({ search, page: page.toString(), limit: "20" });
+    const params = new URLSearchParams({ search, limit: "9999" });
     if (selectedDivision && selectedDivision !== "all") params.set("division", selectedDivision);
-    if (selectedCategory && selectedCategory !== "all") params.set("categoryId", selectedCategory);
+    if (selectedCategory && selectedCategory !== "all" && selectedCategory !== "pending") params.set("categoryId", selectedCategory);
     if (selectedSubCategory && selectedSubCategory !== "all") params.set("subCategoryId", selectedSubCategory);
     if (selectedBrand && selectedBrand !== "all") params.set("brand", selectedBrand);
 
@@ -171,14 +169,23 @@ export default function ItemsPage() {
       fetch("/api/categories"),
     ]);
     const itemsData = await itemsRes.json();
-    const catsData = await catsRes.json();
+    const catsData: Category[] = await catsRes.json();
+
+    setCategories(catsData);
+
+    if (selectedCategory === "pending") {
+      const divCats = catsData.filter((c) => c.division === selectedDivision);
+      if (divCats.length > 0) {
+        setSelectedCategory(divCats[0].id);
+        setLoading(false);
+        return;
+      }
+    }
 
     setItems(itemsData.items || []);
-    setTotalPages(itemsData.totalPages || 1);
     setTotalItems(itemsData.total || 0);
-    setCategories(catsData);
     setLoading(false);
-  }, [search, selectedDivision, selectedCategory, selectedSubCategory, selectedBrand, page]);
+  }, [search, selectedDivision, selectedCategory, selectedSubCategory, selectedBrand]);
 
   useEffect(() => {
     loadData();
@@ -583,14 +590,15 @@ export default function ItemsPage() {
             placeholder="Search items..."
             className="pl-10"
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            onChange={(e) => { setSearch(e.target.value);}}
           />
         </div>
         <Select value={selectedDivision} onValueChange={(v: string | null) => {
-          setSelectedDivision(v || "all");
-          setSelectedCategory("all");
+          const div = v || "HOME_THEATER";
+          setSelectedDivision(div);
+          const divCats = categories.filter((c) => div === "all" || c.division === div);
+          setSelectedCategory(divCats.length > 0 ? divCats[0].id : "all");
           setSelectedSubCategory("all");
-          setPage(1);
         }}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="All Divisions" />
@@ -604,7 +612,6 @@ export default function ItemsPage() {
         <Select value={selectedCategory} onValueChange={(v: string | null) => {
           setSelectedCategory(v || "all");
           setSelectedSubCategory("all");
-          setPage(1);
         }}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="All Categories" />
@@ -621,8 +628,7 @@ export default function ItemsPage() {
         {selectedCategory !== "all" && filterSubCategories.length > 0 && (
           <Select value={selectedSubCategory} onValueChange={(v: string | null) => {
             setSelectedSubCategory(v || "all");
-            setPage(1);
-          }}>
+            }}>
             <SelectTrigger className="w-[220px]">
               <SelectValue placeholder="All Sub-Categories" />
             </SelectTrigger>
@@ -637,8 +643,7 @@ export default function ItemsPage() {
         {brands.length > 0 && (
           <Select value={selectedBrand} onValueChange={(v: string | null) => {
             setSelectedBrand(v || "all");
-            setPage(1);
-          }}>
+            }}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="All Brands" />
             </SelectTrigger>
@@ -761,19 +766,6 @@ export default function ItemsPage() {
             </Card>
           ))}
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 pt-4">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-                Previous
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                Page {page} of {totalPages}
-              </span>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-                Next
-              </Button>
-            </div>
-          )}
         </div>
       )}
       {/* Stock Adjustment Dialog */}

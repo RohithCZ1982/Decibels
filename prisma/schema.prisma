@@ -60,6 +60,7 @@ model Category {
   hsnCode       String?
   order         Int           @default(0)
   division      String        @default("HOME_THEATER")
+  deleted       Boolean       @default(false)
   items         Item[]
   subCategories SubCategory[]
 }
@@ -68,6 +69,7 @@ model SubCategory {
   id         String   @id @default(cuid())
   name       String
   hsnCode    String?
+  deleted    Boolean  @default(false)
   category   Category @relation(fields: [categoryId], references: [id])
   categoryId String
   items      Item[]

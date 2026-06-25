@@ -271,7 +271,7 @@ export async function generateSalaryReceiptPDF(data: SalaryReceiptData) {
   doc.setFontSize(7);
   doc.setFont("Poppins", "normal");
   doc.text("This is a computer-generated document. No signature required.", pw / 2, footerY, { align: "center" });
-  doc.text("Decibels Audio Pvt Ltd | #277/A, Hebbal Industrial Area, Mysuru - 570 027", pw / 2, footerY + 4, { align: "center" });
+  doc.text("Decibels Audio Systems | #277/A, Hebbal Industrial Area, Mysuru - 570 027", pw / 2, footerY + 4, { align: "center" });
 
   window.open(doc.output("bloburl"), "_blank");
 }

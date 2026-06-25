@@ -23,7 +23,11 @@ export async function GET(request: NextRequest) {
         { brand: { contains: search, mode: "insensitive" } },
       ];
     }
-    if (categoryId) where.categoryId = categoryId;
+    if (categoryId) {
+      where.categoryId = categoryId;
+    } else {
+      where.category = { deleted: false };
+    }
     if (subCategoryId) where.subCategoryId = subCategoryId;
     if (brand) where.brand = brand;
     if (division) where.division = division;

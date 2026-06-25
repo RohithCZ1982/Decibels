@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const categoryId = searchParams.get("categoryId");
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { deleted: false };
     if (categoryId) where.categoryId = categoryId;
 
     const subCategories = await prisma.subCategory.findMany({

@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Volume2,
   UserCheck,
+  FolderTree,
   Sun,
   Moon,
 } from "lucide-react";
@@ -29,6 +30,7 @@ const navigation = [
   { name: "Customers", href: "/customers", icon: Users },
   { name: "Quotations", href: "/quotations", icon: FileText },
   { name: "Items", href: "/items", icon: Package, adminOnly: true },
+  { name: "Categories", href: "/categories", icon: FolderTree, adminOnly: true },
   { name: "Templates", href: "/templates", icon: Layers, adminOnly: true },
   { name: "Payments", href: "/payments", icon: CreditCard },
   { name: "Employees", href: "/employees", icon: UserCheck, adminOnly: true },
@@ -58,7 +60,7 @@ export function Sidebar() {
         {!collapsed && (
           <div className="flex-1 min-w-0">
             <h1 className="text-base font-bold text-primary tracking-tight">DECIBELS</h1>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em]">Audio Pvt Ltd</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em]">Audio Systems</p>
           </div>
         )}
       </div>

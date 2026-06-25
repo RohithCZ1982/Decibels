@@ -6,26 +6,23 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   return withAuth(async () => {
     const { id } = await params;
     const body = await request.json();
-    const { name, hsnCode, order, division } = body;
+    const { name, hsnCode } = body;
 
-    const category = await prisma.category.update({
+    const subCategory = await prisma.subCategory.update({
       where: { id },
       data: {
         ...(name && { name }),
         ...(hsnCode !== undefined && { hsnCode: hsnCode || null }),
-        ...(order !== undefined && { order }),
-        ...(division !== undefined && { division }),
       },
     });
-    return jsonResponse(category);
+    return jsonResponse(subCategory);
   }, "ADMIN");
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withAuth(async () => {
     const { id } = await params;
-    await prisma.subCategory.updateMany({ where: { categoryId: id }, data: { deleted: true } });
-    await prisma.category.update({ where: { id }, data: { deleted: true } });
+    await prisma.subCategory.update({ where: { id }, data: { deleted: true } });
     return jsonResponse({ success: true });
   }, "ADMIN");
 }
