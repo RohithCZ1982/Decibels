@@ -100,14 +100,17 @@ export default function EmployeesPage() {
   const [empSaving, setEmpSaving] = useState(false);
 
   const [salDialogOpen, setSalDialogOpen] = useState(false);
+  const [editingSal, setEditingSal] = useState<Salary | null>(null);
   const [salForm, setSalForm] = useState(emptySalary);
   const [salSaving, setSalSaving] = useState(false);
 
   const [dedDialogOpen, setDedDialogOpen] = useState(false);
+  const [editingDed, setEditingDed] = useState<SalaryDeduction | null>(null);
   const [dedForm, setDedForm] = useState(emptyDeduction);
   const [dedSaving, setDedSaving] = useState(false);
 
   const [advDialogOpen, setAdvDialogOpen] = useState(false);
+  const [editingAdv, setEditingAdv] = useState<SalaryAdvance | null>(null);
   const [advForm, setAdvForm] = useState(emptyAdvance);
   const [advSaving, setAdvSaving] = useState(false);
 
@@ -182,12 +185,20 @@ export default function EmployeesPage() {
   };
 
   // Salary CRUD
-  const openNewSal = () => { setSalForm({ ...emptySalary, month: filterMonth, year: filterYear }); setSalDialogOpen(true); };
+  const openNewSal = () => { setEditingSal(null); setSalForm({ ...emptySalary, month: filterMonth, year: filterYear }); setSalDialogOpen(true); };
+  const openEditSal = (s: Salary) => {
+    setEditingSal(s);
+    setSalForm({ employeeId: s.employee.id, month: s.month.toString(), year: s.year.toString(), amount: s.amount.toString(), notes: s.notes || "" });
+    setSalDialogOpen(true);
+  };
   const saveSal = async () => {
-    if (!salForm.employeeId || !salForm.amount) { toast.error("Employee and amount are required"); return; }
+    if (!salForm.amount) { toast.error("Amount is required"); return; }
+    if (!editingSal && !salForm.employeeId) { toast.error("Employee is required"); return; }
     setSalSaving(true);
-    const res = await fetch("/api/salaries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(salForm) });
-    if (res.ok) { toast.success("Salary added"); setSalDialogOpen(false); loadSalaries(); }
+    const url = editingSal ? `/api/salaries/${editingSal.id}` : "/api/salaries";
+    const method = editingSal ? "PUT" : "POST";
+    const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(salForm) });
+    if (res.ok) { toast.success(editingSal ? "Salary updated" : "Salary added"); setSalDialogOpen(false); loadSalaries(); }
     else { const d = await res.json(); toast.error(d.error || "Failed"); }
     setSalSaving(false);
   };
@@ -198,7 +209,13 @@ export default function EmployeesPage() {
   };
 
   // Deduction CRUD
-  const openNewDed = () => { setDedForm({ ...emptyDeduction }); setDedDialogOpen(true); };
+  const openNewDed = () => { setEditingDed(null); setDedForm({ ...emptyDeduction }); setDedDialogOpen(true); };
+  const openEditDed = (d: SalaryDeduction) => {
+    const emp = employees.find((e) => e.name === d.employee.name);
+    setEditingDed(d);
+    setDedForm({ employeeId: emp?.id || "", salaryId: d.salary ? "" : "", amount: d.amount.toString(), reason: d.reason, date: d.date.split("T")[0], notes: d.notes || "" });
+    setDedDialogOpen(true);
+  };
   const saveDed = async () => {
     if (!dedForm.employeeId || !dedForm.amount || !dedForm.reason) { toast.error("Employee, amount, and reason are required"); return; }
 
@@ -231,8 +248,10 @@ export default function EmployeesPage() {
     }
 
     setDedSaving(true);
-    const res = await fetch("/api/salary-deductions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(dedForm) });
-    if (res.ok) { toast.success("Deduction added"); setDedDialogOpen(false); loadDeductions(); loadAllDeductions(); loadSalaries(); }
+    const url = editingDed ? `/api/salary-deductions/${editingDed.id}` : "/api/salary-deductions";
+    const method = editingDed ? "PUT" : "POST";
+    const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(dedForm) });
+    if (res.ok) { toast.success(editingDed ? "Deduction updated" : "Deduction added"); setDedDialogOpen(false); loadDeductions(); loadAllDeductions(); loadSalaries(); }
     else { const d = await res.json(); toast.error(d.error || "Failed"); }
     setDedSaving(false);
   };
@@ -243,14 +262,22 @@ export default function EmployeesPage() {
   };
 
   // Advance CRUD
-  const openNewAdv = () => { setAdvForm({ ...emptyAdvance }); setAdvDialogOpen(true); };
+  const openNewAdv = () => { setEditingAdv(null); setAdvForm({ ...emptyAdvance }); setAdvDialogOpen(true); };
+  const openEditAdv = (a: SalaryAdvance) => {
+    const emp = employees.find((e) => e.name === a.employee.name);
+    setEditingAdv(a);
+    setAdvForm({ employeeId: emp?.id || "", amount: a.amount.toString(), interestRate: a.interestRate.toString(), date: a.date.split("T")[0], notes: a.notes || "" });
+    setAdvDialogOpen(true);
+  };
   const saveAdv = async () => {
     if (!advForm.employeeId || !advForm.amount) { toast.error("Employee and amount are required"); return; }
     const amt = parseFloat(advForm.amount);
     if (amt <= 0) { toast.error("Amount must be greater than 0"); return; }
     setAdvSaving(true);
-    const res = await fetch("/api/salary-advances", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(advForm) });
-    if (res.ok) { toast.success("Advance added"); setAdvDialogOpen(false); loadAdvances(); }
+    const url = editingAdv ? `/api/salary-advances/${editingAdv.id}` : "/api/salary-advances";
+    const method = editingAdv ? "PUT" : "POST";
+    const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(advForm) });
+    if (res.ok) { toast.success(editingAdv ? "Advance updated" : "Advance added"); setAdvDialogOpen(false); loadAdvances(); }
     else { const d = await res.json(); toast.error(d.error || "Failed"); }
     setAdvSaving(false);
   };
@@ -517,6 +544,7 @@ export default function EmployeesPage() {
                             <p className="text-lg font-semibold text-primary">{formatINR(net)}</p>
                           </div>
                           <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-primary" onClick={() => openEditSal(sal)} title="Edit"><Edit2 className="w-4 h-4" /></Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-blue-400" onClick={() => printReceipt(sal)} title="Print Receipt"><Printer className="w-4 h-4" /></Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" onClick={() => deleteSal(sal)}><Trash2 className="w-4 h-4" /></Button>
                           </div>
@@ -562,6 +590,7 @@ export default function EmployeesPage() {
                       <div className="flex items-center gap-4">
                         <p className="text-lg font-semibold text-red-400">{formatINR(ded.amount)}</p>
                         <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-primary" onClick={() => openEditDed(ded)} title="Edit"><Edit2 className="w-4 h-4" /></Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-blue-400" onClick={() => printDeductionReceipt(ded)} title="Print Receipt"><Printer className="w-4 h-4" /></Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" onClick={() => deleteDed(ded)}><Trash2 className="w-4 h-4" /></Button>
                         </div>
@@ -653,6 +682,7 @@ export default function EmployeesPage() {
                           <div className="flex items-center gap-4">
                             <p className="text-lg font-semibold text-amber-400">{formatINR(adv.amount)}</p>
                             <div className="flex gap-1">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-primary" onClick={() => openEditAdv(adv)} title="Edit"><Edit2 className="w-4 h-4" /></Button>
                               <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-blue-400" onClick={() => printAdvanceStatement(adv)} title="Print Statement"><Printer className="w-4 h-4" /></Button>
                               <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" onClick={() => deleteAdv(adv)}><Trash2 className="w-4 h-4" /></Button>
                             </div>
@@ -699,7 +729,7 @@ export default function EmployeesPage() {
       {/* Salary Dialog */}
       <Dialog open={salDialogOpen} onOpenChange={setSalDialogOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Add Salary</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingSal ? "Edit Salary" : "Add Salary"}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="space-y-1">
               <Label>Employee *</Label>
@@ -733,7 +763,7 @@ export default function EmployeesPage() {
             <div className="space-y-1"><Label>Notes</Label><Input value={salForm.notes} onChange={(e) => setSalForm({ ...salForm, notes: e.target.value })} placeholder="Optional" /></div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setSalDialogOpen(false)}>Cancel</Button>
-              <Button onClick={saveSal} disabled={salSaving}>{salSaving ? "Saving..." : "Add Salary"}</Button>
+              <Button onClick={saveSal} disabled={salSaving}>{salSaving ? "Saving..." : editingSal ? "Update" : "Add Salary"}</Button>
             </div>
           </div>
         </DialogContent>
@@ -742,7 +772,7 @@ export default function EmployeesPage() {
       {/* Deduction Dialog */}
       <Dialog open={dedDialogOpen} onOpenChange={setDedDialogOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Add Deduction</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingDed ? "Edit Deduction" : "Add Deduction"}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -811,7 +841,7 @@ export default function EmployeesPage() {
             <div className="space-y-1"><Label>Notes</Label><Input value={dedForm.notes} onChange={(e) => setDedForm({ ...dedForm, notes: e.target.value })} placeholder="Optional" /></div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setDedDialogOpen(false)}>Cancel</Button>
-              <Button onClick={saveDed} disabled={dedSaving}>{dedSaving ? "Saving..." : "Add Deduction"}</Button>
+              <Button onClick={saveDed} disabled={dedSaving}>{dedSaving ? "Saving..." : editingDed ? "Update" : "Add Deduction"}</Button>
             </div>
           </div>
         </DialogContent>
@@ -820,7 +850,7 @@ export default function EmployeesPage() {
       {/* Advance Dialog */}
       <Dialog open={advDialogOpen} onOpenChange={setAdvDialogOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Add Advance Salary</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingAdv ? "Edit Advance" : "Add Advance Salary"}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="space-y-1">
               <Label>Employee *</Label>
@@ -839,7 +869,7 @@ export default function EmployeesPage() {
             <div className="space-y-1"><Label>Notes</Label><Input value={advForm.notes} onChange={(e) => setAdvForm({ ...advForm, notes: e.target.value })} placeholder="Optional" /></div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setAdvDialogOpen(false)}>Cancel</Button>
-              <Button onClick={saveAdv} disabled={advSaving}>{advSaving ? "Saving..." : "Add Advance"}</Button>
+              <Button onClick={saveAdv} disabled={advSaving}>{advSaving ? "Saving..." : editingAdv ? "Update" : "Add Advance"}</Button>
             </div>
           </div>
         </DialogContent>

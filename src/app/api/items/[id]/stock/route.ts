@@ -3,8 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { withAuth, jsonResponse, errorResponse } from "@/lib/api-helpers";
 import { StockTransactionType } from "@/generated/prisma/client";
 
-const STOCK_IN_TYPES: StockTransactionType[] = ["PURCHASE_IN", "INITIAL", "RETURN"];
-const STOCK_OUT_TYPES: StockTransactionType[] = ["SALE_OUT"];
+const STOCK_IN_TYPES: StockTransactionType[] = ["PURCHASE_IN", "INITIAL"];
+const STOCK_OUT_TYPES: StockTransactionType[] = ["SALE_OUT", "RETURN"];
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withAuth(async () => {
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const item = await prisma.item.findUnique({ where: { id } });
     if (!item) return errorResponse("Item not found", 404);
 
-    const isStockIn = STOCK_IN_TYPES.includes(type) || (type === "ADJUSTMENT" && true);
+    const isStockIn = STOCK_IN_TYPES.includes(type) || type === "ADJUSTMENT";
     const stockDelta = isStockIn ? quantity : -quantity;
     const newStock = (item.stock || 0) + stockDelta;
 

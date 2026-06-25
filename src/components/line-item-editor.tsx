@@ -96,7 +96,7 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
       gstRate: item.gstRate,
       unit: item.unit || "No",
       itemId: item.id,
-      division: (item.division as Division) || "HOME_THEATER",
+      division: newItemDivision,
     };
     setLineItems(updated);
     setActiveAutocomplete(null);
@@ -144,8 +144,7 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
           </Button>
         </div>
       </div>
-      <div className="grid grid-cols-[80px_1fr_60px_100px_60px_60px_100px_36px_40px] gap-2 text-xs font-medium text-muted-foreground px-1">
-        <span>Division</span>
+      <div className="grid grid-cols-[1fr_60px_100px_60px_60px_100px_36px_40px] gap-2 text-xs font-medium text-muted-foreground px-1">
         <span>Item Name</span>
         <span>Qty</span>
         <span>Unit Price</span>
@@ -157,29 +156,7 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
       </div>
       {lineItems.map((li, idx) => (
         <div key={li.key} className="space-y-1">
-          <div className="grid grid-cols-[80px_1fr_60px_100px_60px_60px_100px_36px_40px] gap-2 items-start">
-            <div className="flex flex-col gap-0.5 pt-1">
-              <label className="flex items-center gap-1 cursor-pointer">
-                <input
-                  type="radio"
-                  name={`division-${li.key}`}
-                  checked={li.division === "HOME_THEATER"}
-                  onChange={() => updateLineItem(idx, "division", "HOME_THEATER")}
-                  className="accent-primary w-3 h-3"
-                />
-                <span className="text-[10px]">HT</span>
-              </label>
-              <label className="flex items-center gap-1 cursor-pointer">
-                <input
-                  type="radio"
-                  name={`division-${li.key}`}
-                  checked={li.division === "ACOUSTICS"}
-                  onChange={() => updateLineItem(idx, "division", "ACOUSTICS")}
-                  className="accent-primary w-3 h-3"
-                />
-                <span className="text-[10px]">AC</span>
-              </label>
-            </div>
+          <div className="grid grid-cols-[1fr_60px_100px_60px_60px_100px_36px_40px] gap-2 items-start">
             <div className="relative">
               <Input
                 placeholder="Type to search items..."
@@ -196,9 +173,9 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
                 onFocus={() => setActiveAutocomplete(idx)}
                 onBlur={() => setTimeout(() => setActiveAutocomplete(null), 200)}
               />
-              {activeAutocomplete === idx && getFilteredItems(itemSearchValues[idx] ?? li.name, li.division).length > 0 && (
+              {activeAutocomplete === idx && getFilteredItems(itemSearchValues[idx] ?? li.name, newItemDivision).length > 0 && (
                 <div className="absolute z-50 w-full mt-1 border rounded-lg bg-popover shadow-xl max-h-60 overflow-y-auto">
-                  {getFilteredItems(itemSearchValues[idx] ?? li.name, li.division).map((item) => (
+                  {getFilteredItems(itemSearchValues[idx] ?? li.name, newItemDivision).map((item) => (
                     <button
                       key={item.id}
                       className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent border-b border-border/30 last:border-0"
