@@ -696,8 +696,9 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
                     <th className="text-right py-2 pr-4">Qty</th>
                     <th className="text-right py-2 pr-4">Unit Price</th>
                     <th className="text-right py-2 pr-4">Disc %</th>
+                    <th className="text-right py-2 pr-4">Total</th>
                     <th className="text-right py-2 pr-4">GST</th>
-                    <th className="text-right py-2">Total</th>
+                    <th className="text-right py-2">GST Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -719,7 +720,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
                       if (activeDivs.length > 1) {
                         rows.push(
                           <tr key={`div-${div}`} className="bg-primary/10">
-                            <td colSpan={8} className="py-2 px-4 font-semibold text-primary">
+                            <td colSpan={9} className="py-2 px-4 font-semibold text-primary">
                               {divLabels[div] || div}
                             </td>
                           </tr>
@@ -741,8 +742,9 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
                             <td className="py-2.5 pr-4 text-right">{item.quantity}</td>
                             <td className="py-2.5 pr-4 text-right">{formatINR(item.unitPrice)}</td>
                             <td className="py-2.5 pr-4 text-right text-muted-foreground">{item.discount ? `${item.discount}%` : "—"}</td>
+                            <td className="py-2.5 pr-4 text-right font-medium">{formatINR(item.total)}</td>
                             <td className="py-2.5 pr-4 text-right text-muted-foreground">{item.gstRate}%</td>
-                            <td className="py-2.5 text-right font-medium">{formatINR(item.total)}</td>
+                            <td className="py-2.5 text-right font-medium">{formatINR(item.total * (1 + item.gstRate / 100))}</td>
                           </tr>
                         );
                       }
