@@ -32,11 +32,19 @@ interface SubCategory {
   categoryId: string;
 }
 
+interface DivisionInfo {
+  id: string;
+  name: string;
+  slug: string;
+  order: number;
+}
+
 interface Category {
   id: string;
   name: string;
   hsnCode: string | null;
-  division: string;
+  divisionId: string;
+  division: DivisionInfo;
   _count?: { items: number };
   subCategories?: SubCategory[];
 }
@@ -61,7 +69,8 @@ interface Item {
   supplier: string | null;
   imageUrl: string | null;
   active: boolean;
-  division: string;
+  divisionId: string;
+  division: DivisionInfo;
   category: Category;
   categoryId: string;
   subCategory: SubCategory | null;
@@ -113,8 +122,9 @@ function formatINR(amount: number) {
 export default function ItemsPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [divisions, setDivisions] = useState<DivisionInfo[]>([]);
   const [search, setSearch] = useState("");
-  const [selectedDivision, setSelectedDivision] = useState<string>("HOME_THEATER");
+  const [selectedDivision, setSelectedDivision] = useState<string>("pending");
   const [selectedCategory, setSelectedCategory] = useState<string>("pending");
   const [selectedSubCategory, setSelectedSubCategory] = useState<string>("all");
   const [selectedBrand, setSelectedBrand] = useState<string>("all");
@@ -144,7 +154,7 @@ export default function ItemsPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
 
   // Context section state (persistent division/category/subcategory)
-  const [ctxDivision, setCtxDivision] = useState<string>("HOME_THEATER");
+  const [ctxDivision, setCtxDivision] = useState<string>("");
   const [ctxCategoryId, setCtxCategoryId] = useState<string>("");
   const [ctxSubCategoryId, setCtxSubCategoryId] = useState<string>("");
 
@@ -152,31 +162,41 @@ export default function ItemsPage() {
 
   const brands = Array.from(new Set(items.map((i) => i.brand).filter(Boolean))) as string[];
 
-  const filterCategories = selectedDivision === "all" ? categories : categories.filter((c) => c.division === selectedDivision);
+  const filterCategories = selectedDivision === "all" ? categories : categories.filter((c) => c.divisionId === selectedDivision);
   const filterSubCategories = categories.find((c) => c.id === selectedCategory)?.subCategories || [];
 
-  const ctxCategories = categories.filter((c) => c.division === ctxDivision);
+  const ctxCategories = categories.filter((c) => c.divisionId === ctxDivision);
   const ctxSubCategories = categories.find((c) => c.id === ctxCategoryId)?.subCategories || [];
 
   const loadData = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams({ search, limit: "9999" });
-    if (selectedDivision && selectedDivision !== "all") params.set("division", selectedDivision);
+    if (selectedDivision && selectedDivision !== "all" && selectedDivision !== "pending") params.set("divisionId", selectedDivision);
     if (selectedCategory && selectedCategory !== "all" && selectedCategory !== "pending") params.set("categoryId", selectedCategory);
     if (selectedSubCategory && selectedSubCategory !== "all") params.set("subCategoryId", selectedSubCategory);
     if (selectedBrand && selectedBrand !== "all") params.set("brand", selectedBrand);
 
-    const [itemsRes, catsRes] = await Promise.all([
+    const [itemsRes, catsRes, divsRes] = await Promise.all([
       fetch(`/api/items?${params}`),
       fetch("/api/categories"),
+      fetch("/api/divisions"),
     ]);
     const itemsData = await itemsRes.json();
     const catsData: Category[] = await catsRes.json();
+    const divsData: DivisionInfo[] = await divsRes.json();
 
     setCategories(catsData);
+    setDivisions(divsData);
+
+    if (selectedDivision === "pending" && divsData.length > 0) {
+      setSelectedDivision(divsData[0].id);
+      setCtxDivision(divsData[0].id);
+      setLoading(false);
+      return;
+    }
 
     if (selectedCategory === "pending") {
-      const divCats = catsData.filter((c) => c.division === selectedDivision);
+      const divCats = catsData.filter((c) => c.divisionId === selectedDivision);
       if (divCats.length > 0) {
         setSelectedCategory(divCats[0].id);
         setLoading(false);
@@ -212,7 +232,7 @@ export default function ItemsPage() {
 
   const openEdit = (item: Item) => {
     setEditingItem(item);
-    setCtxDivision(item.division || "HOME_THEATER");
+    setCtxDivision(item.divisionId);
     setCtxCategoryId(item.categoryId);
     setCtxSubCategoryId(item.subCategoryId || "");
     setForm({
@@ -246,7 +266,7 @@ export default function ItemsPage() {
 
     const payload = {
       ...form,
-      division: ctxDivision,
+      divisionId: ctxDivision,
       categoryId: ctxCategoryId,
       subCategoryId: ctxSubCategoryId || null,
     };
@@ -279,7 +299,7 @@ export default function ItemsPage() {
 
     const payload = {
       ...form,
-      division: ctxDivision,
+      divisionId: ctxDivision,
       categoryId: ctxCategoryId,
       subCategoryId: ctxSubCategoryId || null,
     };
@@ -365,7 +385,7 @@ export default function ItemsPage() {
     const res = await fetch("/api/categories", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newCategory, hsnCode: newCategoryHsn || null, division: ctxDivision }),
+      body: JSON.stringify({ name: newCategory, hsnCode: newCategoryHsn || null, divisionId: ctxDivision }),
     });
     if (res.ok) {
       const cat = await res.json();
@@ -424,18 +444,22 @@ export default function ItemsPage() {
           {/* Division / Category / Sub-Category context */}
           <div className="rounded-lg border border-border bg-muted/30 p-3 md:p-4 space-y-3">
             <div className="flex flex-col md:flex-row md:items-end gap-3 md:gap-4">
-              <div className="space-y-1 shrink-0">
+              <div className="space-y-1 flex-1 min-w-0">
                 <Label className="text-xs text-muted-foreground">Division</Label>
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input type="radio" checked={ctxDivision === "HOME_THEATER"} onChange={() => { setCtxDivision("HOME_THEATER"); setCtxCategoryId(""); setCtxSubCategoryId(""); setShowNewCategory(false); setShowNewSubCategory(false); }} className="accent-primary" />
-                    <span className="text-sm">Home Theater</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input type="radio" checked={ctxDivision === "ACOUSTICS"} onChange={() => { setCtxDivision("ACOUSTICS"); setCtxCategoryId(""); setCtxSubCategoryId(""); setShowNewCategory(false); setShowNewSubCategory(false); }} className="accent-primary" />
-                    <span className="text-sm">Acoustics</span>
-                  </label>
-                </div>
+                <Select labels={Object.fromEntries(divisions.map((d) => [d.id, d.name]))} value={ctxDivision || "none"} onValueChange={(v: string | null) => {
+                  const val = v === "none" ? "" : (v || "");
+                  setCtxDivision(val);
+                  setCtxCategoryId("");
+                  setCtxSubCategoryId("");
+                  setShowNewCategory(false);
+                  setShowNewSubCategory(false);
+                }}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Select division" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none" label="Select division">Select division</SelectItem>
+                    {divisions.map((d) => <SelectItem key={d.id} value={d.id} label={d.name}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1 flex-1 min-w-0">
                 <Label className="text-xs text-muted-foreground">Category *</Label>
@@ -656,10 +680,10 @@ export default function ItemsPage() {
             onChange={(e) => { setSearch(e.target.value);}}
           />
         </div>
-        <Select value={selectedDivision} onValueChange={(v: string | null) => {
-          const div = v || "HOME_THEATER";
+        <Select labels={Object.fromEntries(divisions.map((d) => [d.id, d.name]))} value={selectedDivision} onValueChange={(v: string | null) => {
+          const div = v || divisions[0]?.id || "all";
           setSelectedDivision(div);
-          const divCats = categories.filter((c) => div === "all" || c.division === div);
+          const divCats = categories.filter((c) => div === "all" || c.divisionId === div);
           setSelectedCategory(divCats.length > 0 ? divCats[0].id : "all");
           setSelectedSubCategory("all");
         }}>
@@ -668,8 +692,7 @@ export default function ItemsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all" label="All Divisions">All Divisions</SelectItem>
-            <SelectItem value="HOME_THEATER" label="Home Theater">Home Theater</SelectItem>
-            <SelectItem value="ACOUSTICS" label="Acoustics">Acoustics</SelectItem>
+            {divisions.map((d) => <SelectItem key={d.id} value={d.id} label={d.name}>{d.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={selectedCategory} onValueChange={(v: string | null) => {
@@ -757,8 +780,8 @@ export default function ItemsPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-3 mt-1 flex-wrap">
-                        <Badge variant={item.division === "ACOUSTICS" ? "default" : "secondary"} className="text-[10px]">
-                          {item.division === "ACOUSTICS" ? "AC" : "HT"}
+                        <Badge variant="secondary" className="text-[10px]">
+                          {item.division?.name?.split(" ").map((w) => w[0]).join("") || "?"}
                         </Badge>
                         <Badge variant="secondary" className="text-[10px]">
                           {item.category.name}
@@ -829,8 +852,8 @@ export default function ItemsPage() {
                       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                         <Badge variant="outline" className="text-[10px]">{item.code}</Badge>
                         {item.brand && <span className="text-[10px] text-muted-foreground">{item.brand}</span>}
-                        <Badge variant={item.division === "ACOUSTICS" ? "default" : "secondary"} className="text-[10px]">
-                          {item.division === "ACOUSTICS" ? "AC" : "HT"}
+                        <Badge variant="secondary" className="text-[10px]">
+                          {item.division?.name?.split(" ").map((w) => w[0]).join("") || "?"}
                         </Badge>
                         <Badge variant="secondary" className="text-[10px]">{item.category.name}</Badge>
                         {item.subCategory && <Badge variant="outline" className="text-[10px]">{item.subCategory.name}</Badge>}

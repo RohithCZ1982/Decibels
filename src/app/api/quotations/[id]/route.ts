@@ -11,7 +11,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       include: {
         customer: true,
         template: true,
-        items: { include: { item: { include: { category: true } } }, orderBy: { sortOrder: "asc" } },
+        items: { include: { division: true, item: { include: { category: true } } }, orderBy: { sortOrder: "asc" } },
         payments: { orderBy: { date: "desc" }, include: { recordedBy: { select: { name: true } } } },
         projectNotes: { orderBy: { createdAt: "desc" }, include: { createdBy: { select: { name: true } } } },
         createdBy: { select: { id: true, name: true } },
@@ -61,7 +61,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             terms,
             validUntil: validUntil ? new Date(validUntil) : undefined,
             items: {
-              create: items.map((item: { name: string; description?: string; hsnCode?: string; quantity: number; unit?: string; unitPrice: number; discount?: number; gstRate?: number; itemId?: string; notes?: string; division?: string }, idx: number) => ({
+              create: items.map((item: { name: string; description?: string; hsnCode?: string; quantity: number; unit?: string; unitPrice: number; discount?: number; gstRate?: number; itemId?: string; notes?: string; divisionId: string }, idx: number) => ({
                 name: item.name,
                 description: item.description || null,
                 hsnCode: item.hsnCode || null,
@@ -74,13 +74,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 itemId: item.itemId || null,
                 notes: item.notes || null,
                 sortOrder: idx,
-                division: item.division || "HOME_THEATER",
+                divisionId: item.divisionId,
               })),
             },
           },
           include: {
             customer: true,
-            items: { orderBy: { sortOrder: "asc" } },
+            items: { include: { division: true }, orderBy: { sortOrder: "asc" } },
             createdBy: { select: { id: true, name: true } },
           },
         });

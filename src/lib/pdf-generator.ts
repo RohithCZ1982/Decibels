@@ -39,7 +39,8 @@ interface QuotationData {
     gstRate?: number;
     total: number;
     notes: string | null;
-    division?: string;
+    divisionId?: string;
+    division?: { id: string; name: string; slug: string; order: number };
     item?: { code: string; description?: string | null; category: { name: string } } | null;
   }>;
   payments?: Array<{
@@ -166,25 +167,23 @@ export async function generateItemListPDF(quotation: QuotationData) {
   y += 10;
 
   // Items table — Sl, Item, Description, Qty (grouped by division)
-  const ilDivLabels: Record<string, string> = { HOME_THEATER: "Home Theater", ACOUSTICS: "Acoustics" };
-  const ilDivOrder = ["HOME_THEATER", "ACOUSTICS"];
-  const ilDivGroups = new Map<string, typeof quotation.items>();
+  const ilDivGroups = new Map<string, { name: string; order: number; items: typeof quotation.items }>();
   for (const item of quotation.items) {
-    const div = item.division || "HOME_THEATER";
-    if (!ilDivGroups.has(div)) ilDivGroups.set(div, []);
-    ilDivGroups.get(div)!.push(item);
+    const divId = item.division?.id || item.divisionId || "unknown";
+    if (!ilDivGroups.has(divId)) ilDivGroups.set(divId, { name: item.division?.name || "Unknown", order: item.division?.order ?? 0, items: [] });
+    ilDivGroups.get(divId)!.items.push(item);
   }
-  const ilActiveDivs = ilDivOrder.filter((d) => ilDivGroups.has(d));
+  const ilActiveDivs = Array.from(ilDivGroups.entries()).sort((a, b) => a[1].order - b[1].order);
 
   const body: string[][] = [];
   const ilRowTypes: ("divHeader" | "item")[] = [];
   let sl = 1;
-  for (const div of ilActiveDivs) {
+  for (const [, group] of ilActiveDivs) {
     if (ilActiveDivs.length > 1) {
-      body.push(["", ilDivLabels[div] || div, "", ""]);
+      body.push(["", group.name, "", ""]);
       ilRowTypes.push("divHeader");
     }
-    for (const item of ilDivGroups.get(div)!) {
+    for (const item of group.items) {
       const desc = item.description || item.item?.description || item.notes || "";
       body.push([sl.toString(), item.name, desc, item.quantity.toString()]);
       ilRowTypes.push("item");
@@ -384,20 +383,14 @@ function drawQuotationPage(
   y += 11;
 
   // --- ITEMS TABLE (grouped by Division then Category) ---
-  const divisionLabels: Record<string, string> = {
-    HOME_THEATER: "Home Theater",
-    ACOUSTICS: "Acoustics",
-  };
-  const divisionOrder = ["HOME_THEATER", "ACOUSTICS"];
-
-  const divGroups = new Map<string, typeof q.items>();
+  const divGroups = new Map<string, { name: string; order: number; items: typeof q.items }>();
   for (const item of q.items) {
-    const div = item.division || "HOME_THEATER";
-    if (!divGroups.has(div)) divGroups.set(div, []);
-    divGroups.get(div)!.push(item);
+    const divId = item.division?.id || item.divisionId || "unknown";
+    if (!divGroups.has(divId)) divGroups.set(divId, { name: item.division?.name || "Unknown", order: item.division?.order ?? 0, items: [] });
+    divGroups.get(divId)!.items.push(item);
   }
 
-  const activeDivisions = divisionOrder.filter((d) => divGroups.has(d));
+  const activeDivisions = Array.from(divGroups.entries()).sort((a, b) => a[1].order - b[1].order);
 
   const tableBody: string[][] = [];
   const tRowTypes: ("divHeader" | "catHeader" | "item" | "subtotal" | "divSubtotal")[] = [];
@@ -407,12 +400,12 @@ function drawQuotationPage(
   const hasAnyDiscount = q.items.some((item) => (item.discount || 0) > 0);
   const colCount = hasAnyDiscount ? 8 : 7;
 
-  for (const div of activeDivisions) {
-    const divItems = divGroups.get(div)!;
+  for (const [, divGroup] of activeDivisions) {
+    const divItems = divGroup.items;
 
     if (activeDivisions.length > 1) {
       const divRow = Array(colCount).fill("");
-      divRow[1] = divisionLabels[div] || div;
+      divRow[1] = divGroup.name;
       tableBody.push(divRow);
       tRowTypes.push("divHeader");
     }
@@ -468,7 +461,7 @@ function drawQuotationPage(
     if (activeDivisions.length > 1) {
       const divTotal = divItems.reduce((s, i) => s + i.total, 0);
       const divSubRow = Array(colCount).fill("");
-      divSubRow[1] = `${divisionLabels[div] || div} Total`;
+      divSubRow[1] = `${divGroup.name} Total`;
       divSubRow[colCount - 1] = formatINR(divTotal);
       tableBody.push(divSubRow);
       tRowTypes.push("divSubtotal");

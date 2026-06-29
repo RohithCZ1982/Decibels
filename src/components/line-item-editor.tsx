@@ -3,9 +3,21 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 
-export type Division = "HOME_THEATER" | "ACOUSTICS";
+export interface DivisionOption {
+  id: string;
+  name: string;
+  slug: string;
+  order: number;
+}
 
 export interface LineItem {
   key: string;
@@ -19,7 +31,7 @@ export interface LineItem {
   gstRate: number;
   itemId: string | null;
   notes: string;
-  division: Division;
+  divisionId: string;
 }
 
 export interface CatalogItem {
@@ -32,7 +44,8 @@ export interface CatalogItem {
   unitPrice: number;
   unit?: string;
   brand?: string | null;
-  division?: string;
+  divisionId: string;
+  division?: { id: string; name: string; slug: string };
   category: { name: string };
   subCategory?: { name: string } | null;
 }
@@ -42,8 +55,8 @@ export function nextLineItemKey() {
   return `li-${++keyCounter}`;
 }
 
-export function emptyLineItem(division: Division = "HOME_THEATER"): LineItem {
-  return { key: nextLineItemKey(), name: "", description: "", hsnCode: "", quantity: 1, unit: "No", unitPrice: 0, discount: 0, gstRate: 18, itemId: null, notes: "", division };
+export function emptyLineItem(divisionId: string): LineItem {
+  return { key: nextLineItemKey(), name: "", description: "", hsnCode: "", quantity: 1, unit: "No", unitPrice: 0, discount: 0, gstRate: 18, itemId: null, notes: "", divisionId };
 }
 
 function formatINR(n: number) {
@@ -54,15 +67,16 @@ interface LineItemEditorProps {
   lineItems: LineItem[];
   setLineItems: (items: LineItem[]) => void;
   allItems: CatalogItem[];
+  divisions: DivisionOption[];
 }
 
-export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEditorProps) {
+export function LineItemEditor({ lineItems, setLineItems, allItems, divisions }: LineItemEditorProps) {
   const [activeAutocomplete, setActiveAutocomplete] = useState<number | null>(null);
   const [itemSearchValues, setItemSearchValues] = useState<Record<number, string>>({});
-  const [newItemDivision, setNewItemDivision] = useState<Division>("HOME_THEATER");
+  const [newItemDivisionId, setNewItemDivisionId] = useState<string>(divisions[0]?.id || "");
 
   const addLineItem = () => {
-    setLineItems([...lineItems, emptyLineItem(newItemDivision)]);
+    setLineItems([...lineItems, emptyLineItem(newItemDivisionId)]);
   };
 
   const removeLineItem = (idx: number) => {
@@ -96,18 +110,18 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
       gstRate: item.gstRate,
       unit: item.unit || "No",
       itemId: item.id,
-      division: newItemDivision,
+      divisionId: newItemDivisionId,
     };
     setLineItems(updated);
     setActiveAutocomplete(null);
     setItemSearchValues({});
   };
 
-  const getFilteredItems = (searchVal: string, division: Division) => {
+  const getFilteredItems = (searchVal: string, divisionId: string) => {
     if (searchVal.length < 1) return [];
     const lower = searchVal.toLowerCase();
     return allItems.filter(
-      (item) => (item.division || "HOME_THEATER") === division &&
+      (item) => item.divisionId === divisionId &&
         (item.name.toLowerCase().includes(lower) || item.code.toLowerCase().includes(lower))
     ).slice(0, 8);
   };
@@ -116,29 +130,21 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-2">
         <span className="text-base font-semibold">Line Items</span>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input
-                type="radio"
-                name="newItemDivision"
-                checked={newItemDivision === "HOME_THEATER"}
-                onChange={() => setNewItemDivision("HOME_THEATER")}
-                className="accent-primary"
-              />
-              <span className="text-sm font-medium">Home Theater</span>
-            </label>
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input
-                type="radio"
-                name="newItemDivision"
-                checked={newItemDivision === "ACOUSTICS"}
-                onChange={() => setNewItemDivision("ACOUSTICS")}
-                className="accent-primary"
-              />
-              <span className="text-sm font-medium">Acoustics</span>
-            </label>
-          </div>
+        <div className="flex items-center gap-3">
+          <Select
+            labels={Object.fromEntries(divisions.map((d) => [d.id, d.name]))}
+            value={newItemDivisionId}
+            onValueChange={(v: string | null) => setNewItemDivisionId(v || divisions[0]?.id || "")}
+          >
+            <SelectTrigger className="w-[160px] h-8 text-sm">
+              <SelectValue placeholder="Division" />
+            </SelectTrigger>
+            <SelectContent>
+              {divisions.map((d) => (
+                <SelectItem key={d.id} value={d.id} label={d.name}>{d.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="sm" onClick={addLineItem}>
             <Plus className="w-4 h-4 mr-1" /> Add Item
           </Button>
@@ -175,9 +181,9 @@ export function LineItemEditor({ lineItems, setLineItems, allItems }: LineItemEd
                 onFocus={() => setActiveAutocomplete(idx)}
                 onBlur={() => setTimeout(() => setActiveAutocomplete(null), 200)}
               />
-              {activeAutocomplete === idx && getFilteredItems(itemSearchValues[idx] ?? li.name, newItemDivision).length > 0 && (
+              {activeAutocomplete === idx && getFilteredItems(itemSearchValues[idx] ?? li.name, newItemDivisionId).length > 0 && (
                 <div className="absolute z-50 w-full mt-1 border rounded-lg bg-popover shadow-xl max-h-60 overflow-y-auto">
-                  {getFilteredItems(itemSearchValues[idx] ?? li.name, newItemDivision).map((item) => (
+                  {getFilteredItems(itemSearchValues[idx] ?? li.name, newItemDivisionId).map((item) => (
                     <button
                       key={item.id}
                       className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent border-b border-border/30 last:border-0"

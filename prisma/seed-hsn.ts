@@ -8,22 +8,28 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log("Seeding categories and items...\n");
 
+  const htDiv = await prisma.division.upsert({
+    where: { slug: "HOME_THEATER" },
+    update: {},
+    create: { name: "Home Theater", slug: "HOME_THEATER", order: 1 },
+  });
+
   const avEquipment = await prisma.category.upsert({
     where: { name: "AV Equipment" },
     update: {},
-    create: { name: "AV Equipment", order: 1 },
+    create: { name: "AV Equipment", order: 1, divisionId: htDiv.id },
   });
 
   const acousticProducts = await prisma.category.upsert({
     where: { name: "Acoustic Products" },
     update: {},
-    create: { name: "Acoustic Products", order: 2 },
+    create: { name: "Acoustic Products", order: 2, divisionId: htDiv.id },
   });
 
   const plywoodEnclosures = await prisma.category.upsert({
     where: { name: "Plywood & Enclosures" },
     update: {},
-    create: { name: "Plywood & Enclosures", order: 3 },
+    create: { name: "Plywood & Enclosures", order: 3, divisionId: htDiv.id },
   });
 
   console.log("Categories:", avEquipment.name, "|", acousticProducts.name, "|", plywoodEnclosures.name);
@@ -61,7 +67,7 @@ async function main() {
       await prisma.item.update({ where: { code: item.code }, data: { hsnCode: item.hsnCode, gstRate: item.gstRate, unitPrice: item.unitPrice, name: item.name } });
       console.log("  Updated:", item.code, item.name);
     } else {
-      await prisma.item.create({ data: item });
+      await prisma.item.create({ data: { ...item, divisionId: htDiv.id } });
       console.log("  Created:", item.code, item.name);
       created++;
     }

@@ -13,11 +13,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Plus,
   Edit2,
   Trash2,
   ChevronRight,
   FolderTree,
+  Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -34,22 +42,24 @@ interface Category {
   name: string;
   hsnCode: string | null;
   order: number;
-  division: string;
+  divisionId: string;
+  division: { id: string; name: string; slug: string };
   _count?: { items: number };
   subCategories: SubCategory[];
 }
 
-type Division = "HOME_THEATER" | "ACOUSTICS";
-
-const DIVISION_LABELS: Record<string, string> = {
-  HOME_THEATER: "Home Theater",
-  ACOUSTICS: "Acoustics",
-};
+interface DivisionInfo {
+  id: string;
+  name: string;
+  slug: string;
+  order: number;
+}
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [divisions, setDivisions] = useState<DivisionInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeDivision, setActiveDivision] = useState<Division>("HOME_THEATER");
+  const [activeDivision, setActiveDivision] = useState<string>("");
 
   // Category dialog
   const [catDialogOpen, setCatDialogOpen] = useState(false);
@@ -67,10 +77,26 @@ export default function CategoriesPage() {
   // Expanded category
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
 
+  // Division dialog
+  const [divDialogOpen, setDivDialogOpen] = useState(false);
+  const [editingDiv, setEditingDiv] = useState<DivisionInfo | null>(null);
+  const [divForm, setDivForm] = useState({ name: "", slug: "" });
+  const [divSaving, setDivSaving] = useState(false);
+
   const loadData = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/categories?division=${activeDivision}`);
-    if (res.ok) setCategories(await res.json());
+    const [catsRes, divsRes] = await Promise.all([
+      activeDivision ? fetch(`/api/categories?divisionId=${activeDivision}`) : fetch("/api/categories"),
+      fetch("/api/divisions"),
+    ]);
+    if (catsRes.ok) setCategories(await catsRes.json());
+    const divs: DivisionInfo[] = await divsRes.json();
+    setDivisions(divs);
+    if (!activeDivision && divs.length > 0) {
+      setActiveDivision(divs[0].id);
+      setLoading(false);
+      return;
+    }
     setLoading(false);
   }, [activeDivision]);
 
@@ -97,7 +123,7 @@ export default function CategoriesPage() {
     const method = editingCat ? "PUT" : "POST";
     const payload = editingCat
       ? { name: catForm.name.trim(), hsnCode: catForm.hsnCode || null }
-      : { name: catForm.name.trim(), hsnCode: catForm.hsnCode || null, division: activeDivision };
+      : { name: catForm.name.trim(), hsnCode: catForm.hsnCode || null, divisionId: activeDivision };
 
     const res = await fetch(url, {
       method,
@@ -188,6 +214,60 @@ export default function CategoriesPage() {
     }
   };
 
+  // --- Division CRUD ---
+  const openNewDiv = () => {
+    setEditingDiv(null);
+    setDivForm({ name: "", slug: "" });
+    setDivDialogOpen(true);
+  };
+
+  const openEditDiv = () => {
+    const div = divisions.find((d) => d.id === activeDivision);
+    if (!div) return;
+    setEditingDiv(div);
+    setDivForm({ name: div.name, slug: div.slug });
+    setDivDialogOpen(true);
+  };
+
+  const saveDiv = async () => {
+    if (!divForm.name.trim()) { toast.error("Name is required"); return; }
+    setDivSaving(true);
+
+    if (editingDiv) {
+      const res = await fetch(`/api/divisions/${editingDiv.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: divForm.name.trim(), slug: divForm.slug.trim().toUpperCase().replace(/\s+/g, "_") || undefined }),
+      });
+      if (res.ok) {
+        toast.success("Division updated");
+        setDivDialogOpen(false);
+        loadData();
+      } else {
+        const d = await res.json();
+        toast.error(d.error || "Failed to update");
+      }
+    } else {
+      const slug = divForm.slug.trim() || divForm.name.trim().toUpperCase().replace(/\s+/g, "_");
+      const res = await fetch("/api/divisions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: divForm.name.trim(), slug }),
+      });
+      if (res.ok) {
+        const newDiv = await res.json();
+        toast.success("Division created");
+        setDivDialogOpen(false);
+        setActiveDivision(newDiv.id);
+        loadData();
+      } else {
+        const d = await res.json();
+        toast.error(d.error || "Failed to create");
+      }
+    }
+    setDivSaving(false);
+  };
+
   const divCategories = categories;
 
   return (
@@ -206,21 +286,30 @@ export default function CategoriesPage() {
         </Button>
       </div>
 
-      {/* Division Tabs */}
-      <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
-        {(["HOME_THEATER", "ACOUSTICS"] as Division[]).map((div) => (
-          <button
-            key={div}
-            onClick={() => { setActiveDivision(div); setExpandedCat(null); }}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeDivision === div
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {DIVISION_LABELS[div]}
-          </button>
-        ))}
+      {/* Division selector */}
+      <div className="flex items-center gap-2">
+        <Select
+          labels={Object.fromEntries(divisions.map((d) => [d.id, d.name]))}
+          value={activeDivision || "none"}
+          onValueChange={(v: string | null) => {
+            if (v && v !== "none") { setActiveDivision(v); setExpandedCat(null); }
+          }}
+        >
+          <SelectTrigger className="w-[220px]">
+            <SelectValue placeholder="Select Division" />
+          </SelectTrigger>
+          <SelectContent>
+            {divisions.map((d) => <SelectItem key={d.id} value={d.id} label={d.name}>{d.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {activeDivision && (
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={openEditDiv} title="Edit Division">
+            <Settings2 className="w-4 h-4" />
+          </Button>
+        )}
+        <Button variant="outline" size="sm" onClick={openNewDiv}>
+          <Plus className="w-4 h-4 mr-1" /> Division
+        </Button>
       </div>
 
       {/* Categories List */}
@@ -230,7 +319,7 @@ export default function CategoriesPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <FolderTree className="w-10 h-10 mb-3 opacity-40" />
-            <p className="font-medium">No categories in {DIVISION_LABELS[activeDivision]}</p>
+            <p className="font-medium">No categories in {divisions.find((d) => d.id === activeDivision)?.name || "this division"}</p>
             <p className="text-sm mt-1">Click &quot;Add Category&quot; to create one.</p>
           </CardContent>
         </Card>
@@ -361,7 +450,7 @@ export default function CategoriesPage() {
           <div className="space-y-4 mt-2">
             <div className="space-y-1">
               <Label>Division</Label>
-              <p className="text-sm font-medium text-primary">{DIVISION_LABELS[activeDivision]}</p>
+              <p className="text-sm font-medium text-primary">{divisions.find((d) => d.id === activeDivision)?.name || "—"}</p>
             </div>
             <div className="space-y-1">
               <Label>Name *</Label>
@@ -384,6 +473,44 @@ export default function CategoriesPage() {
               <Button variant="outline" onClick={() => setCatDialogOpen(false)}>Cancel</Button>
               <Button onClick={saveCat} disabled={catSaving}>
                 {catSaving ? "Saving..." : editingCat ? "Update" : "Create"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Division Dialog */}
+      <Dialog open={divDialogOpen} onOpenChange={setDivDialogOpen} disablePointerDismissal>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingDiv ? "Edit Division" : "Add Division"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-1">
+              <Label>Name *</Label>
+              <Input
+                value={divForm.name}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  setDivForm({ name, slug: editingDiv ? divForm.slug : name.toUpperCase().replace(/\s+/g, "_") });
+                }}
+                placeholder="e.g. Home Theater"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Slug</Label>
+              <Input
+                value={divForm.slug}
+                onChange={(e) => setDivForm({ ...divForm, slug: e.target.value.toUpperCase().replace(/\s+/g, "_") })}
+                placeholder="e.g. HOME_THEATER"
+              />
+              <p className="text-xs text-muted-foreground">Auto-generated from name. Used internally.</p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setDivDialogOpen(false)}>Cancel</Button>
+              <Button onClick={saveDiv} disabled={divSaving}>
+                {divSaving ? "Saving..." : editingDiv ? "Update" : "Create"}
               </Button>
             </div>
           </div>

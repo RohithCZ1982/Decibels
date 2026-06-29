@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Search, ArrowLeft, Save } from "lucide-react";
 import { toast } from "sonner";
-import { LineItemEditor, emptyLineItem, nextLineItemKey, type LineItem, type CatalogItem } from "@/components/line-item-editor";
+import { LineItemEditor, emptyLineItem, nextLineItemKey, type LineItem, type CatalogItem, type DivisionOption } from "@/components/line-item-editor";
 import { calculateQuotationTotals, generateQuotationNumber } from "@/lib/quotation-calc";
 
 interface Customer {
@@ -42,6 +42,7 @@ export default function NewQuotationPage() {
   const [allItems, setAllItems] = useState<CatalogItem[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [divisions, setDivisions] = useState<DivisionOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -52,7 +53,7 @@ export default function NewQuotationPage() {
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState("");
-  const [lineItems, setLineItems] = useState<LineItem[]>([emptyLineItem()]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [includeGst, setIncludeGst] = useState(true);
   const [enableRoundOff, setEnableRoundOff] = useState(false);
   const [notes, setNotes] = useState("");
@@ -64,15 +65,21 @@ export default function NewQuotationPage() {
   const [newCustEmail, setNewCustEmail] = useState("");
 
   const loadData = useCallback(async () => {
-    const [iRes, tRes, cRes] = await Promise.all([
+    const [iRes, tRes, cRes, dRes] = await Promise.all([
       fetch("/api/items?all=true"),
       fetch("/api/templates"),
       fetch("/api/customers?limit=500"),
+      fetch("/api/divisions"),
     ]);
     setAllItems(await iRes.json());
     setTemplates(await tRes.json());
     const cData = await cRes.json();
     setCustomers(cData.customers || []);
+    const divs: DivisionOption[] = await dRes.json();
+    setDivisions(divs);
+    if (divs.length > 0) {
+      setLineItems((prev) => prev.length === 0 ? [emptyLineItem(divs[0].id)] : prev);
+    }
     setLoading(false);
   }, []);
 
@@ -84,7 +91,7 @@ export default function NewQuotationPage() {
   const handleTemplateChange = (templateId: string) => {
     setSelectedTemplate(templateId);
     if (!templateId) {
-      setLineItems([emptyLineItem()]);
+      setLineItems([emptyLineItem(divisions[0]?.id || "")]);
       return;
     }
     const template = templates.find((t) => t.id === templateId);
@@ -102,7 +109,7 @@ export default function NewQuotationPage() {
           gstRate: ti.item.gstRate,
           itemId: ti.item.id,
           notes: "",
-          division: (ti.item.division as "HOME_THEATER" | "ACOUSTICS") || "HOME_THEATER",
+          divisionId: ti.item.divisionId || ti.item.division?.id || divisions[0]?.id || "",
         }))
       );
     }
@@ -174,7 +181,7 @@ export default function NewQuotationPage() {
           gstRate: li.gstRate,
           itemId: li.itemId,
           notes: li.notes,
-          division: li.division || "HOME_THEATER",
+          divisionId: li.divisionId,
         })),
         discount: disc,
         notes,
@@ -336,7 +343,7 @@ export default function NewQuotationPage() {
 
       <Card className="overflow-visible">
         <CardContent className="pt-6">
-          <LineItemEditor lineItems={lineItems} setLineItems={setLineItems} allItems={allItems} />
+          <LineItemEditor lineItems={lineItems} setLineItems={setLineItems} allItems={allItems} divisions={divisions} />
         </CardContent>
       </Card>
 

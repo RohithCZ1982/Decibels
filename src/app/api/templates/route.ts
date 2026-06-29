@@ -7,7 +7,7 @@ export async function GET() {
     const templates = await prisma.template.findMany({
       where: { active: true },
       include: {
-        items: { include: { item: { include: { category: true } } } },
+        items: { include: { item: { include: { category: true, division: true } } } },
         _count: { select: { quotations: true } },
       },
       orderBy: { name: "asc" },
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
         },
       },
       include: {
-        items: { include: { item: { include: { category: true } } } },
+        items: { include: { item: { include: { category: true, division: true } } } },
       },
     });
     return jsonResponse(template, 201);

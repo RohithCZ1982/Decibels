@@ -7,7 +7,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     const template = await prisma.template.findUnique({
       where: { id },
-      include: { items: { include: { item: { include: { category: true } } } } },
+      include: { items: { include: { item: { include: { category: true, division: true } } } } },
     });
     if (!template) return errorResponse("Template not found", 404);
     return jsonResponse(template);
@@ -37,7 +37,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           })),
         },
       },
-      include: { items: { include: { item: { include: { category: true } } } } },
+      include: { items: { include: { item: { include: { category: true, division: true } } } } },
     });
     return jsonResponse(template);
   }, "ADMIN");

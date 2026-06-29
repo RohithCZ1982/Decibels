@@ -7,7 +7,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     const item = await prisma.item.findUnique({
       where: { id },
-      include: { category: true, subCategory: true },
+      include: { category: true, subCategory: true, division: true },
     });
     if (!item) return errorResponse("Item not found", 404);
     return jsonResponse(item);
@@ -23,7 +23,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       description, supplier, stock, imageUrl, active, hsnCode, gstRate,
       brand, unit, taxType, subCategoryId,
       purchasePrice, purchasePriceInclTax, profitMargin,
-      manageStock, alertQuantity, division,
+      manageStock, alertQuantity, divisionId,
     } = body;
 
     if (unitPrice != null && !isValidNumber(unitPrice)) {
@@ -64,9 +64,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         ...(profitMargin !== undefined && { profitMargin: profitMargin != null ? parseFloat(profitMargin) : null }),
         ...(manageStock !== undefined && { manageStock }),
         ...(alertQuantity !== undefined && { alertQuantity: alertQuantity ? parseInt(alertQuantity) : 0 }),
-        ...(division !== undefined && { division }),
+        ...(divisionId !== undefined && { divisionId }),
       },
-      include: { category: true, subCategory: true },
+      include: { category: true, subCategory: true, division: true },
     });
     return jsonResponse(item);
   }, "ADMIN");

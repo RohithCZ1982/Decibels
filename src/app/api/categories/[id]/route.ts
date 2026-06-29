@@ -6,7 +6,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   return withAuth(async () => {
     const { id } = await params;
     const body = await request.json();
-    const { name, hsnCode, order, division } = body;
+    const { name, hsnCode, order, divisionId } = body;
 
     const existing = await prisma.category.findUnique({ where: { id } });
     if (!existing) return errorResponse("Category not found", 404);
@@ -17,8 +17,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         ...(name && { name }),
         ...(hsnCode !== undefined && { hsnCode: hsnCode || null }),
         ...(order !== undefined && { order }),
-        ...(division !== undefined && { division }),
+        ...(divisionId !== undefined && { divisionId }),
       },
+      include: { division: true },
     });
     return jsonResponse(category);
   }, "ADMIN");

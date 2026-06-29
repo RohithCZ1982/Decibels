@@ -62,15 +62,29 @@ model User {
   helpTickets        HelpTicket[]
 }
 
+model Division {
+  id    String @id @default(cuid())
+  name  String @unique
+  slug  String @unique
+  order Int    @default(0)
+
+  categories     Category[]
+  items          Item[]
+  quotationItems QuotationItem[]
+}
+
 model Category {
   id            String        @id @default(cuid())
   name          String        @unique
   hsnCode       String?
   order         Int           @default(0)
-  division      String        @default("HOME_THEATER")
+  division      Division      @relation(fields: [divisionId], references: [id])
+  divisionId    String
   deleted       Boolean       @default(false)
   items         Item[]
   subCategories SubCategory[]
+
+  @@index([divisionId])
 }
 
 model SubCategory {
@@ -110,7 +124,8 @@ model Item {
   supplier String?
   imageUrl String?
   active   Boolean @default(true)
-  division String  @default("HOME_THEATER")
+  division      Division     @relation(fields: [divisionId], references: [id])
+  divisionId    String
 
   category      Category     @relation(fields: [categoryId], references: [id])
   categoryId    String
@@ -126,6 +141,7 @@ model Item {
 
   @@index([categoryId])
   @@index([subCategoryId])
+  @@index([divisionId])
   @@index([name])
   @@index([brand])
 }
@@ -222,13 +238,15 @@ model QuotationItem {
   total       Float
   notes       String?
   sortOrder   Int     @default(0)
-  division    String  @default("HOME_THEATER")
+  division    Division  @relation(fields: [divisionId], references: [id])
+  divisionId  String
 
   quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   quotationId String
   item        Item?     @relation(fields: [itemId], references: [id])
   itemId      String?
 
+  @@index([divisionId])
   @@index([quotationId])
 }
 

@@ -49,7 +49,7 @@ import {
 import { toast } from "sonner";
 import { generateQuotationPDF, generateItemListPDF } from "@/lib/pdf-generator";
 import { generateQuotationExcel } from "@/lib/excel-generator";
-import { LineItemEditor, nextLineItemKey, emptyLineItem, type LineItem, type CatalogItem } from "@/components/line-item-editor";
+import { LineItemEditor, nextLineItemKey, emptyLineItem, type LineItem, type CatalogItem, type DivisionOption } from "@/components/line-item-editor";
 import { calculateQuotationTotals, EDITABLE_STATUSES, INVOICE_STATUSES } from "@/lib/quotation-calc";
 
 interface QuotationDetail {
@@ -85,7 +85,8 @@ interface QuotationDetail {
     gstRate: number;
     total: number;
     notes: string | null;
-    division: string;
+    divisionId: string;
+    division: { id: string; name: string; slug: string; order: number };
     item: { code: string; description: string | null; category: { name: string } } | null;
   }>;
   payments: Array<{
@@ -172,12 +173,15 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
   const [editDiscountAdj, setEditDiscountAdj] = useState(0);
   const [editDiscountInput, setEditDiscountInput] = useState("");
   const [allCatalogItems, setAllCatalogItems] = useState<CatalogItem[]>([]);
+  const [divisions, setDivisions] = useState<DivisionOption[]>([]);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/quotations/${id}`);
-    if (res.ok) {
-      setQuotation(await res.json());
-    }
+    const [qRes, dRes] = await Promise.all([
+      fetch(`/api/quotations/${id}`),
+      fetch("/api/divisions"),
+    ]);
+    if (qRes.ok) setQuotation(await qRes.json());
+    if (dRes.ok) setDivisions(await dRes.json());
     setLoading(false);
   }, [id]);
 
@@ -215,7 +219,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
         gstRate: item.gstRate,
         itemId: item.item ? undefined as unknown as string : null,
         notes: item.notes || "",
-        division: (item.division as "HOME_THEATER" | "ACOUSTICS") || "HOME_THEATER",
+        divisionId: item.divisionId,
       }))
     );
     const itemAutoDisc = quotation.items.reduce((sum, item) => sum + item.quantity * item.unitPrice * ((item.discount || 0) / 100), 0);
@@ -255,7 +259,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
           gstRate: li.gstRate,
           itemId: li.itemId,
           notes: li.notes,
-          division: li.division || "HOME_THEATER",
+          divisionId: li.divisionId,
         })),
         discount: editDisc,
         includeGst: editIncludeGst,
@@ -687,7 +691,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
       {editing ? (
         <Card className="overflow-visible">
           <CardContent className="pt-6">
-            <LineItemEditor lineItems={editItems} setLineItems={setEditItems} allItems={allCatalogItems} />
+            <LineItemEditor lineItems={editItems} setLineItems={setEditItems} allItems={allCatalogItems} divisions={divisions} />
           </CardContent>
         </Card>
       ) : (
@@ -713,25 +717,23 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
                 </thead>
                 <tbody>
                   {(() => {
-                    const divLabels: Record<string, string> = { HOME_THEATER: "Home Theater", ACOUSTICS: "Acoustics" };
-                    const divOrder = ["HOME_THEATER", "ACOUSTICS"];
-                    const divGroups = new Map<string, typeof quotation.items>();
+                    const divGroups = new Map<string, { name: string; order: number; items: typeof quotation.items }>();
                     for (const item of quotation.items) {
-                      const div = item.division || "HOME_THEATER";
-                      if (!divGroups.has(div)) divGroups.set(div, []);
-                      divGroups.get(div)!.push(item);
+                      const divId = item.divisionId;
+                      if (!divGroups.has(divId)) divGroups.set(divId, { name: item.division.name, order: item.division.order, items: [] });
+                      divGroups.get(divId)!.items.push(item);
                     }
-                    const activeDivs = divOrder.filter((d) => divGroups.has(d));
+                    const activeDivs = Array.from(divGroups.entries()).sort((a, b) => a[1].order - b[1].order);
                     let serial = 0;
 
-                    return activeDivs.flatMap((div) => {
-                      const items = divGroups.get(div)!;
+                    return activeDivs.flatMap(([divId, group]) => {
+                      const items = group.items;
                       const rows = [];
                       if (activeDivs.length > 1) {
                         rows.push(
-                          <tr key={`div-${div}`} className="bg-primary/10">
+                          <tr key={`div-${divId}`} className="bg-primary/10">
                             <td colSpan={9} className="py-2 px-4 font-semibold text-primary">
-                              {divLabels[div] || div}
+                              {group.name}
                             </td>
                           </tr>
                         );

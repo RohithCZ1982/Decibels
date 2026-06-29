@@ -36,7 +36,8 @@ interface QuotationData {
     discount?: number;
     gstRate?: number;
     total: number;
-    division?: string;
+    divisionId?: string;
+    division?: { id: string; name: string; slug: string; order: number };
     notes: string | null;
     item?: { code: string; description?: string | null; category: { name: string } } | null;
   }>;
@@ -247,16 +248,13 @@ function buildQuotationSheet(wb: ExcelJS.Workbook, q: QuotationData, isInvoice: 
   row += 2;
 
   // --- ITEMS TABLE ---
-  const divLabels: Record<string, string> = { HOME_THEATER: "Home Theater", ACOUSTICS: "Acoustics" };
-  const divOrder = ["HOME_THEATER", "ACOUSTICS"];
-
-  const divGroups = new Map<string, typeof q.items>();
+  const divGroups = new Map<string, { name: string; order: number; items: typeof q.items }>();
   for (const item of q.items) {
-    const div = item.division || "HOME_THEATER";
-    if (!divGroups.has(div)) divGroups.set(div, []);
-    divGroups.get(div)!.push(item);
+    const divId = item.division?.id || item.divisionId || "unknown";
+    if (!divGroups.has(divId)) divGroups.set(divId, { name: item.division?.name || "Unknown", order: item.division?.order ?? 0, items: [] });
+    divGroups.get(divId)!.items.push(item);
   }
-  const activeDivs = divOrder.filter((d) => divGroups.has(d));
+  const activeDivs = Array.from(divGroups.entries()).sort((a, b) => a[1].order - b[1].order);
 
   // Table header
   const headers = ["Sl", "Product Description", "HSN", "Qty", "Unit", "Rate (₹)"];
@@ -275,14 +273,14 @@ function buildQuotationSheet(wb: ExcelJS.Workbook, q: QuotationData, isInvoice: 
   row++;
 
   let sl = 1;
-  for (const div of activeDivs) {
-    const divItems = divGroups.get(div)!;
+  for (const [, divGroup] of activeDivs) {
+    const divItems = divGroup.items;
 
     // Division header
     if (activeDivs.length > 1) {
       ws.mergeCells(row, 1, row, lastCol);
       const dc = ws.getCell(row, 1);
-      dc.value = divLabels[div] || div;
+      dc.value = divGroup.name;
       dc.font = headerFont(10);
       dc.fill = fillBg(PINK_LIGHT);
       dc.alignment = { horizontal: "left", vertical: "middle" };
@@ -382,7 +380,7 @@ function buildQuotationSheet(wb: ExcelJS.Workbook, q: QuotationData, isInvoice: 
       const divTotal = divItems.reduce((s, i) => s + i.total, 0);
       ws.mergeCells(row, 1, row, lastCol - 1);
       const dstLbl = ws.getCell(row, 1);
-      dstLbl.value = `${divLabels[div] || div} Total`;
+      dstLbl.value = `${divGroup.name} Total`;
       dstLbl.font = boldFont(10, PINK);
       dstLbl.fill = fillBg("E6E6E1");
       applyBorder(dstLbl);

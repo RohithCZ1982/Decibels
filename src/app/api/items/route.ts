@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const categoryId = searchParams.get("categoryId");
     const subCategoryId = searchParams.get("subCategoryId");
     const brand = searchParams.get("brand");
-    const division = searchParams.get("division");
+    const divisionId = searchParams.get("divisionId");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = clampLimit(parseInt(searchParams.get("limit") || "50"));
     const all = searchParams.get("all") === "true";
@@ -30,9 +30,9 @@ export async function GET(request: NextRequest) {
     }
     if (subCategoryId) where.subCategoryId = subCategoryId;
     if (brand) where.brand = brand;
-    if (division) where.division = division;
+    if (divisionId) where.divisionId = divisionId;
 
-    const include = { category: true, subCategory: true };
+    const include = { category: true, subCategory: true, division: true };
 
     if (all) {
       const items = await prisma.item.findMany({
@@ -66,11 +66,11 @@ export async function POST(request: NextRequest) {
       description, supplier, stock, imageUrl, hsnCode, gstRate,
       brand, unit, taxType, subCategoryId,
       purchasePrice, purchasePriceInclTax, profitMargin,
-      manageStock, alertQuantity, division,
+      manageStock, alertQuantity, divisionId,
     } = body;
 
-    if (!code || !name || !categoryId || unitPrice == null) {
-      return errorResponse("Code, name, category, and unit price are required");
+    if (!code || !name || !categoryId || unitPrice == null || !divisionId) {
+      return errorResponse("Code, name, category, division, and unit price are required");
     }
     if (!isValidNumber(unitPrice)) {
       return errorResponse("Unit price must be a valid number");
@@ -106,9 +106,9 @@ export async function POST(request: NextRequest) {
         profitMargin: profitMargin != null ? parseFloat(profitMargin) : null,
         manageStock: manageStock ?? false,
         alertQuantity: alertQuantity ? parseInt(alertQuantity) : 0,
-        division: division || "HOME_THEATER",
+        divisionId,
       },
-      include: { category: true, subCategory: true },
+      include: { category: true, subCategory: true, division: true },
     });
     return jsonResponse(item, 201);
   }, "ADMIN");
