@@ -397,9 +397,9 @@ export default function EmployeesPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-secondary/50 p-1 rounded-lg w-fit">
+      <div className="flex gap-1 bg-secondary/50 p-1 rounded-lg w-fit overflow-x-auto max-w-full">
         {tabs.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === t.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+          <button key={t.key} onClick={() => setTab(t.key)} className={`px-3 md:px-4 py-2 rounded-md text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${tab === t.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
             {t.label}
           </button>
         ))}
@@ -415,7 +415,8 @@ export default function EmployeesPage() {
             {overviewData.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">No active employees</p>
             ) : (
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+              <table className="w-full text-sm min-w-[600px]">
                 <thead>
                   <tr className="border-b border-border text-left">
                     <th className="pb-2 font-medium text-muted-foreground">Employee</th>
@@ -446,6 +447,7 @@ export default function EmployeesPage() {
                   </tr>
                 </tfoot>
               </table>
+              </div>
             )}
           </CardContent>
         </Card>

@@ -458,15 +458,15 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
     : null;
 
   return (
-    <div className="space-y-6 max-w-6xl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/quotations")}>
+    <div className="space-y-4 md:space-y-6 max-w-6xl">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <Button variant="ghost" size="icon" onClick={() => router.push("/quotations")} className="shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold">{quotation.quotationNumber}</h1>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl md:text-2xl font-bold">{quotation.quotationNumber}</h1>
               <Badge variant="outline" className={`${statusColors[quotation.status]}`}>
                 {quotation.status.replace("_", " ")}
               </Badge>
@@ -484,40 +484,40 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5 md:gap-2 flex-wrap">
           {editing ? (
             <>
-              <Button variant="outline" onClick={cancelEditing} disabled={saving}>
-                <X className="w-4 h-4 mr-2" /> Cancel
+              <Button variant="outline" size="icon" className="h-8 w-8 md:h-9 md:w-auto md:px-3" onClick={cancelEditing} disabled={saving} title="Cancel">
+                <X className="w-4 h-4 md:mr-2" /> <span className="hidden md:inline">Cancel</span>
               </Button>
-              <Button onClick={saveEdits} disabled={saving}>
-                <Save className="w-4 h-4 mr-2" />
-                {saving ? "Saving..." : "Save Changes"}
+              <Button size="icon" className="h-8 w-8 md:h-9 md:w-auto md:px-3" onClick={saveEdits} disabled={saving} title={saving ? "Saving..." : "Save Changes"}>
+                <Save className="w-4 h-4 md:mr-2" />
+                <span className="hidden md:inline">{saving ? "Saving..." : "Save Changes"}</span>
               </Button>
             </>
           ) : (
             <>
               {canEdit && (
-                <Button variant="outline" onClick={startEditing}>
-                  <Pencil className="w-4 h-4 mr-2" /> Edit
+                <Button variant="outline" size="icon" className="h-8 w-8 md:h-9 md:w-auto md:px-3" onClick={startEditing} title="Edit">
+                  <Pencil className="w-4 h-4 md:mr-2" /> <span className="hidden md:inline">Edit</span>
                 </Button>
               )}
-              <Button variant="outline" onClick={handleDownloadPDF}>
-                <Download className="w-4 h-4 mr-2" /> PDF
+              <Button variant="outline" size="icon" className="h-8 w-8 md:h-9 md:w-auto md:px-3" onClick={handleDownloadPDF} title="Download PDF">
+                <Download className="w-4 h-4 md:mr-2" /> <span className="hidden md:inline">PDF</span>
               </Button>
-              <Button variant="outline" onClick={handleItemListPDF}>
-                <ClipboardList className="w-4 h-4 mr-2" /> Item List
+              <Button variant="outline" size="icon" className="h-8 w-8 md:h-9 md:w-auto md:px-3" onClick={handleItemListPDF} title="Item List">
+                <ClipboardList className="w-4 h-4 md:mr-2" /> <span className="hidden md:inline">Item List</span>
               </Button>
               {prev && (
-                <Button variant="outline" onClick={() => updateStatus(prev.status)} disabled={saving}>
-                  <Undo2 className="w-4 h-4 mr-2" />
-                  {prev.label}
+                <Button variant="outline" size="icon" className="h-8 w-8 md:h-9 md:w-auto md:px-3" onClick={() => updateStatus(prev.status)} disabled={saving} title={prev.label}>
+                  <Undo2 className="w-4 h-4 md:mr-2" />
+                  <span className="hidden md:inline">{prev.label}</span>
                 </Button>
               )}
               {action && (
-                <Button onClick={() => updateStatus(action.status)} disabled={saving}>
-                  <action.icon className="w-4 h-4 mr-2" />
-                  {action.label}
+                <Button size="icon" className="h-8 w-8 md:h-9 md:w-auto md:px-3" onClick={() => updateStatus(action.status)} disabled={saving} title={action.label}>
+                  <action.icon className="w-4 h-4 md:mr-2" />
+                  <span className="hidden md:inline">{action.label}</span>
                 </Button>
               )}
             </>
@@ -527,25 +527,25 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
 
       {/* Status Pipeline */}
       <Card>
-        <CardContent className="py-4">
+        <CardContent className="py-3 md:py-4">
           <div className="flex items-center justify-between">
             {statusFlow.map((step, idx) => {
               const isActive = idx <= currentStatusIdx;
               const isCurrent = step.key === quotation.status;
               return (
-                <div key={step.key} className="flex items-center flex-1">
+                <div key={step.key} className="flex items-center flex-1" title={step.label}>
                   <div className="flex flex-col items-center flex-1">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+                    <div className={`w-7 h-7 md:w-9 md:h-9 rounded-full flex items-center justify-center transition-colors ${
                       isCurrent ? "bg-primary text-primary-foreground" : isActive ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
                     }`}>
-                      <step.icon className="w-4 h-4" />
+                      <step.icon className="w-3.5 h-3.5 md:w-4 md:h-4" />
                     </div>
-                    <span className={`text-[10px] mt-1.5 font-medium ${isCurrent ? "text-primary" : isActive ? "text-foreground" : "text-muted-foreground"}`}>
+                    <span className={`hidden md:block text-[10px] mt-1.5 font-medium text-center leading-tight ${isCurrent ? "text-primary" : isActive ? "text-foreground" : "text-muted-foreground"}`}>
                       {step.label}
                     </span>
                   </div>
                   {idx < statusFlow.length - 1 && (
-                    <div className={`h-0.5 flex-1 mx-1 rounded ${isActive && idx < currentStatusIdx ? "bg-primary/40" : "bg-muted"}`} />
+                    <div className={`h-0.5 flex-1 mx-0.5 md:mx-1 rounded ${isActive && idx < currentStatusIdx ? "bg-primary/40" : "bg-muted"}`} />
                   )}
                 </div>
               );

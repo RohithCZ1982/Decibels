@@ -125,9 +125,9 @@ export default function HelpPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-4 md:space-y-6 max-w-4xl">
       <div>
-        <h1 className="text-2xl font-bold">Help</h1>
+        <h1 className="text-xl md:text-2xl font-bold">Help</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           Report issues or request feature changes
         </p>

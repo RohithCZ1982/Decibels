@@ -134,9 +134,9 @@ export default function ReportsPage() {
   const avgRevenue = monthly.length > 0 ? totalRev / monthly.length : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Reports</h1>
+        <h1 className="text-xl md:text-2xl font-bold">Reports</h1>
         <p className="text-sm text-muted-foreground mt-1">Business analytics and insights</p>
       </div>
 

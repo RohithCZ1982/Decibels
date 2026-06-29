@@ -31,8 +31,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="px-6 py-4 max-w-[1600px] mx-auto">{children}</div>
+      <main className="flex-1 overflow-auto pt-[53px] md:pt-0">
+        <div className="px-3 py-3 md:px-6 md:py-4 max-w-[1600px] mx-auto">{children}</div>
       </main>
     </div>
   );

@@ -62,19 +62,19 @@ export default function QuotationsPage() {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Quotations</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage quotes and project lifecycle</p>
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-bold">Quotations</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Manage quotes and project lifecycle</p>
         </div>
         <Link href="/quotations/new">
-          <Button><Plus className="w-4 h-4 mr-2" /> New Quotation</Button>
+          <Button size="sm" className="md:size-default"><Plus className="w-4 h-4 md:mr-2" /> <span className="hidden md:inline">New Quotation</span></Button>
         </Link>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[240px]">
+      <div className="flex flex-wrap gap-2 md:gap-3">
+        <div className="relative flex-1 min-w-[180px] md:min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Search quotations, customers..."
@@ -115,27 +115,27 @@ export default function QuotationsPage() {
           {quotations.map((q) => (
             <Link key={q.id} href={`/quotations/${q.id}`}>
               <Card className="hover:border-primary/30 transition-colors cursor-pointer">
-                <CardContent className="py-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="p-2.5 rounded-lg bg-secondary">
+                <CardContent className="py-3 md:py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 md:gap-4 min-w-0">
+                      <div className="p-2 md:p-2.5 rounded-lg bg-secondary shrink-0 hidden md:block">
                         <FileText className="w-5 h-5 text-muted-foreground" />
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold">{q.quotationNumber}</p>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-sm md:text-base">{q.quotationNumber}</p>
                           <Badge variant="outline" className={`text-[10px] ${statusColors[q.status]}`}>
                             {q.status.replace("_", " ")}
                           </Badge>
                         </div>
-                        <p className="text-sm text-muted-foreground mt-0.5">
+                        <p className="text-xs md:text-sm text-muted-foreground mt-0.5 truncate">
                           {q.customer.name} &bull; {q._count.items} items
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-primary">{formatINR(q.grandTotal)}</p>
-                      <p className="text-xs text-muted-foreground">
+                    <div className="text-right shrink-0">
+                      <p className="text-sm md:text-lg font-bold text-primary">{formatINR(q.grandTotal)}</p>
+                      <p className="text-[10px] md:text-xs text-muted-foreground">
                         {new Date(q.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
                       </p>
                     </div>

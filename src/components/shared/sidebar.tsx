@@ -21,8 +21,10 @@ import {
   Sun,
   Moon,
   HelpCircle,
+  Menu,
+  X,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 
@@ -44,17 +46,17 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user, logout, isAdmin } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const { theme, setTheme } = useTheme();
 
   const filteredNav = navigation.filter((item) => !item.adminOnly || isAdmin);
 
-  return (
-    <aside
-      className={cn(
-        "flex flex-col border-r border-border bg-sidebar transition-all duration-300 h-screen sticky top-0",
-        collapsed ? "w-[68px]" : "w-64"
-      )}
-    >
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  const sidebarContent = (
+    <>
       <div className="flex items-center gap-2 px-4 py-5 border-b border-border">
         <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10">
           <Volume2 className="w-5 h-5 text-primary" />
@@ -65,6 +67,12 @@ export function Sidebar() {
             <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em]">Audio Systems</p>
           </div>
         )}
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="md:hidden flex items-center justify-center w-8 h-8 rounded-lg hover:bg-accent transition-colors ml-auto"
+        >
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto scrollbar-thin">
@@ -124,7 +132,7 @@ export function Sidebar() {
         </button>
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-accent transition-colors mt-1"
+          className="hidden md:flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-accent transition-colors mt-1"
           title={collapsed ? "Expand" : "Collapse"}
         >
           {collapsed ? (
@@ -137,6 +145,54 @@ export function Sidebar() {
           )}
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile top bar */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-40 flex items-center gap-3 px-3 py-2.5 border-b border-border bg-sidebar">
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="flex items-center justify-center w-9 h-9 rounded-lg hover:bg-accent transition-colors"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+        <div className="flex items-center gap-2">
+          <Volume2 className="w-4 h-4 text-primary" />
+          <span className="text-sm font-bold text-primary tracking-tight">DECIBELS</span>
+        </div>
+      </div>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-50 bg-black/50"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Mobile drawer */}
+      <aside
+        className={cn(
+          "md:hidden fixed top-0 left-0 z-50 h-full w-64 bg-sidebar transition-transform duration-300",
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <div className="flex flex-col h-full">
+          {sidebarContent}
+        </div>
+      </aside>
+
+      {/* Desktop sidebar */}
+      <aside
+        className={cn(
+          "hidden md:flex flex-col border-r border-border bg-sidebar transition-all duration-300 h-screen sticky top-0",
+          collapsed ? "w-[68px]" : "w-64"
+        )}
+      >
+        {sidebarContent}
+      </aside>
+    </>
   );
 }

@@ -47,10 +47,10 @@ export default function PaymentsPage() {
   if (!data) return <p className="text-muted-foreground">Failed to load data</p>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Payments</h1>
-        <p className="text-sm text-muted-foreground mt-1">Track payments and outstanding balances</p>
+        <h1 className="text-xl md:text-2xl font-bold">Payments</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Track payments and outstanding balances</p>
       </div>
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">

@@ -356,26 +356,24 @@ export default function ItemsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Master Database</h1>
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-bold">Master Database</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {totalItems > 0 ? `${totalItems} products` : "Manage products, services, and equipment"}
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen} disablePointerDismissal>
-          <DialogTrigger>
-            <Button onClick={openNew}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Item
-            </Button>
+          <DialogTrigger render={<Button onClick={openNew} />}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Item
           </DialogTrigger>
-          <DialogContent className="!w-[80vw] !max-w-[80vw]">
+          <DialogContent className="!w-[95vw] !max-w-[95vw] md:!w-[80vw] md:!max-w-[80vw] max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingItem ? "Edit Item" : "Add New Item"}</DialogTitle>
             </DialogHeader>
-            <div className="grid grid-cols-2 gap-6 mt-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
               {/* Left Column */}
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Basic Info</h3>
@@ -583,8 +581,8 @@ export default function ItemsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[240px]">
+      <div className="flex flex-wrap gap-2 md:gap-3">
+        <div className="relative flex-1 min-w-[180px] md:min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Search items..."
@@ -676,8 +674,9 @@ export default function ItemsPage() {
         <div className="grid gap-3">
           {items.map((item) => (
             <Card key={item.id} className="hover:border-primary/30 transition-colors">
-              <CardContent className="py-4">
-                <div className="flex items-center justify-between">
+              <CardContent className="py-3 md:py-4">
+                {/* Desktop layout */}
+                <div className="hidden md:flex items-center justify-between">
                   <div className="flex items-center gap-4 flex-1 min-w-0">
                     <div className="p-2.5 rounded-lg bg-secondary shrink-0">
                       <Package className="w-5 h-5 text-muted-foreground" />
@@ -751,13 +750,64 @@ export default function ItemsPage() {
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(item)}>
                         <Edit2 className="w-4 h-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 hover:text-destructive"
-                        onClick={() => handleDelete(item)}
-                      >
+                      <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" onClick={() => handleDelete(item)}>
                         <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                {/* Mobile layout */}
+                <div className="md:hidden space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{item.name}</p>
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <Badge variant="outline" className="text-[10px]">{item.code}</Badge>
+                        {item.brand && <span className="text-[10px] text-muted-foreground">{item.brand}</span>}
+                        <Badge variant={item.division === "ACOUSTICS" ? "default" : "secondary"} className="text-[10px]">
+                          {item.division === "ACOUSTICS" ? "AC" : "HT"}
+                        </Badge>
+                        <Badge variant="secondary" className="text-[10px]">{item.category.name}</Badge>
+                        {item.subCategory && <Badge variant="outline" className="text-[10px]">{item.subCategory.name}</Badge>}
+                      </div>
+                    </div>
+                    <p className="text-sm font-semibold text-primary whitespace-nowrap shrink-0">{formatINR(item.unitPrice)}</p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-wrap text-[10px] text-muted-foreground">
+                      <span>GST: {item.gstRate}%</span>
+                      <span>{item.unit}</span>
+                      {item.manageStock && (
+                        <button
+                          onClick={() => openHistory(item)}
+                          className={`inline-flex items-center gap-1 font-medium px-1.5 py-0.5 rounded cursor-pointer ${
+                            (item.stock ?? 0) === 0
+                              ? "bg-red-500/20 text-red-400"
+                              : (item.stock ?? 0) <= item.alertQuantity
+                                ? "bg-yellow-500/20 text-yellow-400"
+                                : "bg-green-500/20 text-green-400"
+                          }`}
+                        >
+                          Stock: {item.stock ?? 0}
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex gap-0.5">
+                      {item.manageStock && user?.role === "ADMIN" && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-green-400" onClick={() => openStockDialog(item)} title="Adjust Stock">
+                          <PackagePlus className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
+                      {item.manageStock && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-blue-400" onClick={() => openHistory(item)} title="Stock History">
+                          <History className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)} title="Edit">
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive" onClick={() => handleDelete(item)} title="Delete">
+                        <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>

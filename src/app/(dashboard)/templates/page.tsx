@@ -152,19 +152,17 @@ export default function TemplatesPage() {
   const templateTotal = templateItems.reduce((sum, ti) => sum + ti.item.unitPrice * ti.quantity, 0);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Project Templates</h1>
-          <p className="text-sm text-muted-foreground mt-1">Reusable configurations for common setups</p>
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-bold">Project Templates</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Reusable configurations for common setups</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen} disablePointerDismissal>
-          <DialogTrigger>
-            <Button onClick={openNew}>
-              <Plus className="w-4 h-4 mr-2" /> New Template
-            </Button>
+          <DialogTrigger render={<Button onClick={openNew} size="sm" className="md:size-default" />}>
+            <Plus className="w-4 h-4 md:mr-2" /> <span className="hidden md:inline">New Template</span>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editing ? "Edit Template" : "Create Template"}</DialogTitle>
             </DialogHeader>

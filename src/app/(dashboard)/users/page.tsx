@@ -81,15 +81,15 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">User Management</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage admin and staff accounts</p>
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-bold">User Management</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Manage admin and staff accounts</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen} disablePointerDismissal>
-          <DialogTrigger>
-            <Button><Plus className="w-4 h-4 mr-2" /> Add User</Button>
+          <DialogTrigger render={<Button size="sm" className="md:size-default" />}>
+            <Plus className="w-4 h-4 md:mr-2" /> <span className="hidden md:inline">Add User</span>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>

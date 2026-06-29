@@ -75,24 +75,24 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">
+        <h1 className="text-xl md:text-2xl font-bold">Dashboard</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
           Overview of projects and inventory
         </p>
       </div>
 
       <Tabs defaultValue="quotations">
-        <TabsList variant="line" className="w-full justify-start border-b border-border pb-0 mb-2">
-          <TabsTrigger value="quotations" className="gap-2 text-sm px-4 py-2">
+        <TabsList variant="line" className="w-full justify-start border-b border-border pb-0 mb-2 overflow-x-auto">
+          <TabsTrigger value="quotations" className="gap-1.5 md:gap-2 text-xs md:text-sm px-2.5 md:px-4 py-2">
             <FileText className="w-4 h-4" />
             Quotations
             <Badge variant="outline" className="ml-1 text-[10px] px-1.5 py-0">
               {totalCount}
             </Badge>
           </TabsTrigger>
-          <TabsTrigger value="low-stock" className="gap-2 text-sm px-4 py-2">
+          <TabsTrigger value="low-stock" className="gap-1.5 md:gap-2 text-xs md:text-sm px-2.5 md:px-4 py-2">
             <Package className="w-4 h-4" />
             Low Stock Alerts
             {lowStockItems.length > 0 && (
@@ -218,11 +218,11 @@ export default function DashboardPage() {
                     <thead>
                       <tr className="border-b text-muted-foreground">
                         <th className="text-left py-2 pr-4 font-medium">Item</th>
-                        <th className="text-left py-2 pr-4 font-medium">Code</th>
-                        <th className="text-left py-2 pr-4 font-medium">Category</th>
-                        <th className="text-left py-2 pr-4 font-medium">Brand</th>
-                        <th className="text-right py-2 pr-4 font-medium">Current Stock</th>
-                        <th className="text-right py-2 font-medium">Alert Level</th>
+                        <th className="text-left py-2 pr-4 font-medium hidden md:table-cell">Code</th>
+                        <th className="text-left py-2 pr-4 font-medium hidden lg:table-cell">Category</th>
+                        <th className="text-left py-2 pr-4 font-medium hidden lg:table-cell">Brand</th>
+                        <th className="text-right py-2 pr-4 font-medium">Stock</th>
+                        <th className="text-right py-2 font-medium hidden md:table-cell">Alert</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -233,15 +233,15 @@ export default function DashboardPage() {
                               {item.name}
                             </Link>
                           </td>
-                          <td className="py-3 pr-4 text-muted-foreground">{item.code}</td>
-                          <td className="py-3 pr-4 text-muted-foreground">{item.category.name}</td>
-                          <td className="py-3 pr-4 text-muted-foreground">{item.brand || "—"}</td>
+                          <td className="py-3 pr-4 text-muted-foreground hidden md:table-cell">{item.code}</td>
+                          <td className="py-3 pr-4 text-muted-foreground hidden lg:table-cell">{item.category.name}</td>
+                          <td className="py-3 pr-4 text-muted-foreground hidden lg:table-cell">{item.brand || "—"}</td>
                           <td className="py-3 pr-4 text-right">
                             <span className={`font-semibold ${(item.stock ?? 0) === 0 ? "text-red-400" : "text-yellow-400"}`}>
                               {item.stock ?? 0}
                             </span>
                           </td>
-                          <td className="py-3 text-right text-muted-foreground">{item.alertQuantity}</td>
+                          <td className="py-3 text-right text-muted-foreground hidden md:table-cell">{item.alertQuantity}</td>
                         </tr>
                       ))}
                     </tbody>

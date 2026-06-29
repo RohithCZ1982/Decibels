@@ -193,16 +193,16 @@ export default function CategoriesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Categories</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-bold">Categories</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
             Manage divisions, categories, and sub-categories
           </p>
         </div>
-        <Button onClick={openNewCat}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Category
+        <Button onClick={openNewCat} size="sm" className="md:size-default">
+          <Plus className="w-4 h-4 md:mr-2" />
+          <span className="hidden md:inline">Add Category</span>
         </Button>
       </div>
 
