@@ -90,8 +90,6 @@ const emptyForm = {
   code: "",
   name: "",
   brand: "",
-  categoryId: "",
-  subCategoryId: "",
   unit: "Pc(s)",
   unitPrice: "",
   purchasePrice: "",
@@ -106,7 +104,6 @@ const emptyForm = {
   manageStock: false,
   alertQuantity: "0",
   imageUrl: "",
-  division: "HOME_THEATER",
 };
 
 function formatINR(amount: number) {
@@ -146,6 +143,11 @@ export default function ItemsPage() {
   const [stockHistory, setStockHistory] = useState<StockTransaction[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  // Context section state (persistent division/category/subcategory)
+  const [ctxDivision, setCtxDivision] = useState<string>("HOME_THEATER");
+  const [ctxCategoryId, setCtxCategoryId] = useState<string>("");
+  const [ctxSubCategoryId, setCtxSubCategoryId] = useState<string>("");
+
   const { user } = useAuth();
 
   const brands = Array.from(new Set(items.map((i) => i.brand).filter(Boolean))) as string[];
@@ -153,8 +155,8 @@ export default function ItemsPage() {
   const filterCategories = selectedDivision === "all" ? categories : categories.filter((c) => c.division === selectedDivision);
   const filterSubCategories = categories.find((c) => c.id === selectedCategory)?.subCategories || [];
 
-  const formCategories = categories.filter((c) => c.division === form.division);
-  const formSubCategories = categories.find((c) => c.id === form.categoryId)?.subCategories || [];
+  const ctxCategories = categories.filter((c) => c.division === ctxDivision);
+  const ctxSubCategories = categories.find((c) => c.id === ctxCategoryId)?.subCategories || [];
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -193,7 +195,9 @@ export default function ItemsPage() {
 
   const openNew = async () => {
     setEditingItem(null);
-    setForm(emptyForm);
+    const cat = categories.find((c) => c.id === ctxCategoryId);
+    const sub = ctxSubCategoryId ? ctxSubCategories.find((s) => s.id === ctxSubCategoryId) : null;
+    setForm({ ...emptyForm, hsnCode: sub?.hsnCode || cat?.hsnCode || "" });
     setShowNewCategory(false);
     setShowNewSubCategory(false);
     setDialogOpen(true);
@@ -208,14 +212,13 @@ export default function ItemsPage() {
 
   const openEdit = (item: Item) => {
     setEditingItem(item);
-    setShowNewCategory(false);
-    setShowNewSubCategory(false);
+    setCtxDivision(item.division || "HOME_THEATER");
+    setCtxCategoryId(item.categoryId);
+    setCtxSubCategoryId(item.subCategoryId || "");
     setForm({
       code: item.code,
       name: item.name,
       brand: item.brand || "",
-      categoryId: item.categoryId,
-      subCategoryId: item.subCategoryId || "",
       unit: item.unit || "Pc(s)",
       unitPrice: item.unitPrice.toString(),
       purchasePrice: item.purchasePrice?.toString() || "",
@@ -230,54 +233,22 @@ export default function ItemsPage() {
       manageStock: item.manageStock,
       alertQuantity: item.alertQuantity.toString(),
       imageUrl: item.imageUrl || "",
-      division: item.division || "HOME_THEATER",
     });
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
-    if (!form.code || !form.name || !form.categoryId || !form.unitPrice) {
+    if (!form.code || !form.name || !ctxCategoryId || !form.unitPrice) {
       toast.error("Code, name, category, and selling price are required");
       return;
     }
     setSaving(true);
 
-    let catId = form.categoryId;
-    if (catId === "__new__" && newCategory) {
-      const catRes = await fetch("/api/categories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newCategory, hsnCode: newCategoryHsn || null, division: form.division }),
-      });
-      if (!catRes.ok) {
-        toast.error("Failed to create category");
-        setSaving(false);
-        return;
-      }
-      const cat = await catRes.json();
-      catId = cat.id;
-    }
-
-    let subCatId = form.subCategoryId;
-    if (subCatId === "__new__" && newSubCategory && catId !== "__new__") {
-      const subRes = await fetch("/api/subcategories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newSubCategory, categoryId: catId, hsnCode: newSubCategoryHsn || null }),
-      });
-      if (!subRes.ok) {
-        toast.error("Failed to create sub-category");
-        setSaving(false);
-        return;
-      }
-      const sub = await subRes.json();
-      subCatId = sub.id;
-    }
-
     const payload = {
       ...form,
-      categoryId: catId,
-      subCategoryId: subCatId || null,
+      division: ctxDivision,
+      categoryId: ctxCategoryId,
+      subCategoryId: ctxSubCategoryId || null,
     };
     const url = editingItem ? `/api/items/${editingItem.id}` : "/api/items";
     const method = editingItem ? "PUT" : "POST";
@@ -291,13 +262,47 @@ export default function ItemsPage() {
     if (res.ok) {
       toast.success(editingItem ? "Item updated" : "Item created");
       setDialogOpen(false);
-      setShowNewCategory(false);
-      setShowNewSubCategory(false);
-      setNewCategory("");
-      setNewCategoryHsn("");
-      setNewSubCategory("");
-      setNewSubCategoryHsn("");
       loadData();
+    } else {
+      const data = await res.json();
+      toast.error(data.error || "Failed to save item");
+    }
+    setSaving(false);
+  };
+
+  const handleSaveAndAddAnother = async () => {
+    if (!form.code || !form.name || !ctxCategoryId || !form.unitPrice) {
+      toast.error("Code, name, category, and selling price are required");
+      return;
+    }
+    setSaving(true);
+
+    const payload = {
+      ...form,
+      division: ctxDivision,
+      categoryId: ctxCategoryId,
+      subCategoryId: ctxSubCategoryId || null,
+    };
+
+    const res = await fetch("/api/items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) {
+      toast.success("Item created — add another");
+      const cat = categories.find((c) => c.id === ctxCategoryId);
+      const sub = ctxSubCategoryId ? ctxSubCategories.find((s) => s.id === ctxSubCategoryId) : null;
+      setForm({ ...emptyForm, hsnCode: sub?.hsnCode || cat?.hsnCode || "" });
+      loadData();
+      try {
+        const codeRes = await fetch("/api/items/next-code");
+        if (codeRes.ok) {
+          const { code } = await codeRes.json();
+          setForm((prev) => ({ ...prev, code }));
+        }
+      } catch {}
     } else {
       const data = await res.json();
       toast.error(data.error || "Failed to save item");
@@ -355,6 +360,46 @@ export default function ItemsPage() {
     setHistoryLoading(false);
   };
 
+  const handleCreateCategory = async () => {
+    if (!newCategory) return;
+    const res = await fetch("/api/categories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newCategory, hsnCode: newCategoryHsn || null, division: ctxDivision }),
+    });
+    if (res.ok) {
+      const cat = await res.json();
+      toast.success("Category created");
+      setNewCategory("");
+      setNewCategoryHsn("");
+      setShowNewCategory(false);
+      await loadData();
+      setCtxCategoryId(cat.id);
+    } else {
+      toast.error("Failed to create category");
+    }
+  };
+
+  const handleCreateSubCategory = async () => {
+    if (!newSubCategory || !ctxCategoryId) return;
+    const res = await fetch("/api/subcategories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newSubCategory, categoryId: ctxCategoryId, hsnCode: newSubCategoryHsn || categories.find((c) => c.id === ctxCategoryId)?.hsnCode || null }),
+    });
+    if (res.ok) {
+      const sub = await res.json();
+      toast.success("Sub-category created");
+      setNewSubCategory("");
+      setNewSubCategoryHsn("");
+      setShowNewSubCategory(false);
+      await loadData();
+      setCtxSubCategoryId(sub.id);
+    } else {
+      toast.error("Failed to create sub-category");
+    }
+  };
+
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex items-center justify-between gap-3">
@@ -364,221 +409,241 @@ export default function ItemsPage() {
             {totalItems > 0 ? `${totalItems} products` : "Manage products, services, and equipment"}
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen} disablePointerDismissal>
-          <DialogTrigger render={<Button onClick={openNew} />}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Item
-          </DialogTrigger>
-          <DialogContent className="!w-[95vw] !max-w-[95vw] md:!w-[80vw] md:!max-w-[80vw] max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingItem ? "Edit Item" : "Add New Item"}</DialogTitle>
-            </DialogHeader>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
-              {/* Left Column */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Basic Info</h3>
-                <div className="space-y-1">
-                  <Label>Division</Label>
-                  <div className="flex items-center gap-4">
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="itemDivision"
-                        checked={form.division === "HOME_THEATER"}
-                        onChange={() => setForm({ ...form, division: "HOME_THEATER", categoryId: "", subCategoryId: "" })}
-                        className="accent-primary"
-                      />
-                      <span className="text-sm">Home Theater</span>
-                    </label>
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="itemDivision"
-                        checked={form.division === "ACOUSTICS"}
-                        onChange={() => setForm({ ...form, division: "ACOUSTICS", categoryId: "", subCategoryId: "" })}
-                        className="accent-primary"
-                      />
-                      <span className="text-sm">Acoustics</span>
-                    </label>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <Label>Item Code *</Label>
-                    <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder={editingItem ? "" : "Auto-generated..."} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Brand</Label>
-                    <Input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} placeholder="e.g. YAMAHA" list="brand-list" />
-                    <datalist id="brand-list">{brands.map((b) => <option key={b} value={b} />)}</datalist>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Unit</Label>
-                    <Select value={form.unit} onValueChange={(v: string | null) => setForm({ ...form, unit: v || "Pc(s)" })}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Pc(s)" label="Pc(s)">Pc(s)</SelectItem>
-                        <SelectItem value="PAIR" label="PAIR">PAIR</SelectItem>
-                        <SelectItem value="PKG" label="PKG">PKG</SelectItem>
-                        <SelectItem value="Mtr" label="Mtr">Mtr</SelectItem>
-                        <SelectItem value="Sq Ft" label="Sq Ft">Sq Ft</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label>Name *</Label>
-                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Product name" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label>Category *</Label>
-                    <Select labels={Object.fromEntries(formCategories.map((c) => [c.id, c.name]))} value={form.categoryId} onValueChange={(v: string | null) => {
-                      const val = v || "";
-                      const cat = formCategories.find((c) => c.id === val);
-                      setForm({ ...form, categoryId: val, subCategoryId: "", hsnCode: cat?.hsnCode || form.hsnCode });
-                      setShowNewCategory(val === "__new__");
-                      setShowNewSubCategory(false);
-                    }}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="Select category" /></SelectTrigger>
-                      <SelectContent>
-                        {formCategories.map((c) => <SelectItem key={c.id} value={c.id} label={c.name}>{c.name}</SelectItem>)}
-                        <SelectItem value="__new__" label="+ New Category">+ New Category</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {showNewCategory && (
-                      <div className="flex gap-2 mt-1">
-                        <Input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="Category name" className="flex-1" />
-                        <Input value={newCategoryHsn} onChange={(e) => setNewCategoryHsn(e.target.value)} placeholder="HSN" className="w-24" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Sub-Category</Label>
-                    <Select labels={Object.fromEntries(formSubCategories.map((s) => [s.id, s.name]))} value={form.subCategoryId || "none"} onValueChange={(v: string | null) => {
-                      const val = v || "none";
-                      const sub = formSubCategories.find((s) => s.id === val);
-                      const cat = categories.find((c) => c.id === form.categoryId);
-                      setForm({ ...form, subCategoryId: val === "none" ? "" : val, hsnCode: sub?.hsnCode || cat?.hsnCode || form.hsnCode });
-                      setShowNewSubCategory(val === "__new__");
-                    }}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="None" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none" label="None">None</SelectItem>
-                        {formSubCategories.map((s) => <SelectItem key={s.id} value={s.id} label={s.name}>{s.name}</SelectItem>)}
-                        <SelectItem value="__new__" label="+ New Sub-Category">+ New Sub-Category</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {showNewSubCategory && (
-                      <div className="flex gap-2 mt-1">
-                        <Input value={newSubCategory} onChange={(e) => setNewSubCategory(e.target.value)} placeholder="Sub-category name" className="flex-1" />
-                        <Input value={newSubCategoryHsn} onChange={(e) => setNewSubCategoryHsn(e.target.value)} placeholder="HSN" className="w-24" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label>Description</Label>
-                  <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe this product..." rows={2} />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label>Supplier</Label>
-                    <Input value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} placeholder="Supplier name" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Image URL</Label>
-                    <Input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://..." />
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Pricing</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label>Selling Price (INR) *</Label>
-                    <Input type="number" value={form.unitPrice} onChange={(e) => setForm({ ...form, unitPrice: e.target.value })} placeholder="25000" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Purchase Price (Excl. Tax)</Label>
-                    <Input type="number" value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })} placeholder="0" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label>Purchase Price (Incl. Tax)</Label>
-                    <Input type="number" value={form.purchasePriceInclTax} onChange={(e) => setForm({ ...form, purchasePriceInclTax: e.target.value })} placeholder="0" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Profit Margin %</Label>
-                    <Input type="number" value={form.profitMargin} onChange={(e) => setForm({ ...form, profitMargin: e.target.value })} placeholder="5" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <Label>GST Rate</Label>
-                    <Select value={form.gstRate} onValueChange={(v: string | null) => setForm({ ...form, gstRate: v || "18" })}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="0" label="0%">0%</SelectItem>
-                        <SelectItem value="5" label="5%">5%</SelectItem>
-                        <SelectItem value="12" label="12%">12%</SelectItem>
-                        <SelectItem value="18" label="18%">18%</SelectItem>
-                        <SelectItem value="28" label="28%">28%</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Tax Type</Label>
-                    <Select value={form.taxType} onValueChange={(v: string | null) => setForm({ ...form, taxType: v || "exclusive" })}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="exclusive" label="Exclusive">Exclusive</SelectItem>
-                        <SelectItem value="inclusive" label="Inclusive">Inclusive</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>HSN Code</Label>
-                    <Input value={form.hsnCode} onChange={(e) => setForm({ ...form, hsnCode: e.target.value })} placeholder="e.g. 85184000" />
-                  </div>
-                </div>
-
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide pt-2">Inventory</h3>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <Label>Manage Stock</Label>
-                    <Select value={form.manageStock ? "yes" : "no"} onValueChange={(v: string | null) => setForm({ ...form, manageStock: v === "yes" })}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="no" label="No">No</SelectItem>
-                        <SelectItem value="yes" label="Yes">Yes</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Alert Qty</Label>
-                    <Input type="number" value={form.alertQuantity} onChange={(e) => setForm({ ...form, alertQuantity: e.target.value })} placeholder="0" disabled={!form.manageStock} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Current Stock</Label>
-                    <Input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="0" />
-                  </div>
-                </div>
-
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-3 border-t border-border mt-4">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? "Saving..." : editingItem ? "Update" : "Create"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={openNew}>
+          <Plus className="w-4 h-4 mr-2" /> Add Item
+        </Button>
       </div>
+
+      {/* Item Details Dialog — context selectors at top, item fields below */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen} disablePointerDismissal>
+        <DialogContent className="!w-[95vw] !max-w-[95vw] md:!w-[75vw] md:!max-w-[75vw] max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingItem ? "Edit Item" : "Add New Item"}</DialogTitle>
+          </DialogHeader>
+
+          {/* Division / Category / Sub-Category context */}
+          <div className="rounded-lg border border-border bg-muted/30 p-3 md:p-4 space-y-3">
+            <div className="flex flex-col md:flex-row md:items-end gap-3 md:gap-4">
+              <div className="space-y-1 shrink-0">
+                <Label className="text-xs text-muted-foreground">Division</Label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="radio" checked={ctxDivision === "HOME_THEATER"} onChange={() => { setCtxDivision("HOME_THEATER"); setCtxCategoryId(""); setCtxSubCategoryId(""); setShowNewCategory(false); setShowNewSubCategory(false); }} className="accent-primary" />
+                    <span className="text-sm">Home Theater</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="radio" checked={ctxDivision === "ACOUSTICS"} onChange={() => { setCtxDivision("ACOUSTICS"); setCtxCategoryId(""); setCtxSubCategoryId(""); setShowNewCategory(false); setShowNewSubCategory(false); }} className="accent-primary" />
+                    <span className="text-sm">Acoustics</span>
+                  </label>
+                </div>
+              </div>
+              <div className="space-y-1 flex-1 min-w-0">
+                <Label className="text-xs text-muted-foreground">Category *</Label>
+                <Select labels={Object.fromEntries(ctxCategories.map((c) => [c.id, c.name]))} value={ctxCategoryId || "none"} onValueChange={(v: string | null) => {
+                  const val = v === "none" ? "" : (v || "");
+                  setCtxCategoryId(val);
+                  setCtxSubCategoryId("");
+                  setShowNewCategory(val === "__new__");
+                  setShowNewSubCategory(false);
+                  if (val && val !== "__new__") {
+                    const cat = categories.find((c) => c.id === val);
+                    setForm((prev) => ({ ...prev, hsnCode: cat?.hsnCode || prev.hsnCode }));
+                  }
+                }}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Select category" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none" label="Select category">Select category</SelectItem>
+                    {ctxCategories.map((c) => <SelectItem key={c.id} value={c.id} label={c.name}>{c.name} ({c._count?.items || 0})</SelectItem>)}
+                    <SelectItem value="__new__" label="+ New Category">+ New Category</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1 flex-1 min-w-0">
+                <Label className="text-xs text-muted-foreground">Sub-Category</Label>
+                <Select labels={Object.fromEntries(ctxSubCategories.map((s) => [s.id, s.name]))} value={ctxSubCategoryId || "none"} onValueChange={(v: string | null) => {
+                  const val = v === "none" ? "" : (v || "");
+                  setCtxSubCategoryId(val);
+                  if (val === "__new__") {
+                    const cat = categories.find((c) => c.id === ctxCategoryId);
+                    setNewSubCategoryHsn(cat?.hsnCode || "");
+                  }
+                  setShowNewSubCategory(val === "__new__");
+                  if (val && val !== "__new__") {
+                    const sub = ctxSubCategories.find((s) => s.id === val);
+                    const cat = categories.find((c) => c.id === ctxCategoryId);
+                    setForm((prev) => ({ ...prev, hsnCode: sub?.hsnCode || cat?.hsnCode || prev.hsnCode }));
+                  }
+                }}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none" label="None">None</SelectItem>
+                    {ctxSubCategories.map((s) => <SelectItem key={s.id} value={s.id} label={s.name}>{s.name}</SelectItem>)}
+                    <SelectItem value="__new__" label="+ New Sub-Category">+ New Sub-Category</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {showNewCategory && (
+              <div className="flex gap-2 items-end">
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs">New Category Name</Label>
+                  <Input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="Category name" />
+                </div>
+                <div className="w-28 space-y-1">
+                  <Label className="text-xs">HSN</Label>
+                  <Input value={newCategoryHsn} onChange={(e) => setNewCategoryHsn(e.target.value)} placeholder="HSN" />
+                </div>
+                <Button size="sm" onClick={handleCreateCategory} disabled={!newCategory}>Create</Button>
+                <Button size="sm" variant="ghost" onClick={() => { setShowNewCategory(false); setCtxCategoryId(""); }}>Cancel</Button>
+              </div>
+            )}
+            {showNewSubCategory && (
+              <div className="flex gap-2 items-end">
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs">New Sub-Category Name</Label>
+                  <Input value={newSubCategory} onChange={(e) => setNewSubCategory(e.target.value)} placeholder="Sub-category name" />
+                </div>
+                <div className="w-28 space-y-1">
+                  <Label className="text-xs">HSN</Label>
+                  <Input value={newSubCategoryHsn} onChange={(e) => setNewSubCategoryHsn(e.target.value)} placeholder="HSN" />
+                </div>
+                <Button size="sm" onClick={handleCreateSubCategory} disabled={!newSubCategory}>Create</Button>
+                <Button size="sm" variant="ghost" onClick={() => { setShowNewSubCategory(false); setCtxSubCategoryId(""); }}>Cancel</Button>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
+            {/* Left Column — Basic Info */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Basic Info</h3>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label>Item Code *</Label>
+                  <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder={editingItem ? "" : "Auto-generated..."} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Brand</Label>
+                  <Input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} placeholder="e.g. YAMAHA" list="brand-list" />
+                  <datalist id="brand-list">{brands.map((b) => <option key={b} value={b} />)}</datalist>
+                </div>
+                <div className="space-y-1">
+                  <Label>Unit</Label>
+                  <Select value={form.unit} onValueChange={(v: string | null) => setForm({ ...form, unit: v || "Pc(s)" })}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Pc(s)" label="Pc(s)">Pc(s)</SelectItem>
+                      <SelectItem value="PAIR" label="PAIR">PAIR</SelectItem>
+                      <SelectItem value="PKG" label="PKG">PKG</SelectItem>
+                      <SelectItem value="Mtr" label="Mtr">Mtr</SelectItem>
+                      <SelectItem value="Sq Ft" label="Sq Ft">Sq Ft</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>Name *</Label>
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Product name" />
+              </div>
+              <div className="space-y-1">
+                <Label>Description</Label>
+                <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe this product..." rows={2} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Supplier</Label>
+                  <Input value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} placeholder="Supplier name" />
+                </div>
+                <div className="space-y-1">
+                  <Label>Image URL</Label>
+                  <Input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://..." />
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column — Pricing & Inventory */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Pricing</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Selling Price (INR) *</Label>
+                  <Input type="number" value={form.unitPrice} onChange={(e) => setForm({ ...form, unitPrice: e.target.value })} placeholder="25000" />
+                </div>
+                <div className="space-y-1">
+                  <Label>Purchase Price (Excl. Tax)</Label>
+                  <Input type="number" value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })} placeholder="0" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Purchase Price (Incl. Tax)</Label>
+                  <Input type="number" value={form.purchasePriceInclTax} onChange={(e) => setForm({ ...form, purchasePriceInclTax: e.target.value })} placeholder="0" />
+                </div>
+                <div className="space-y-1">
+                  <Label>Profit Margin %</Label>
+                  <Input type="number" value={form.profitMargin} onChange={(e) => setForm({ ...form, profitMargin: e.target.value })} placeholder="5" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label>GST Rate</Label>
+                  <Select value={form.gstRate} onValueChange={(v: string | null) => setForm({ ...form, gstRate: v || "18" })}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0" label="0%">0%</SelectItem>
+                      <SelectItem value="5" label="5%">5%</SelectItem>
+                      <SelectItem value="12" label="12%">12%</SelectItem>
+                      <SelectItem value="18" label="18%">18%</SelectItem>
+                      <SelectItem value="28" label="28%">28%</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Tax Type</Label>
+                  <Select value={form.taxType} onValueChange={(v: string | null) => setForm({ ...form, taxType: v || "exclusive" })}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="exclusive" label="Exclusive">Exclusive</SelectItem>
+                      <SelectItem value="inclusive" label="Inclusive">Inclusive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>HSN Code</Label>
+                  <Input value={form.hsnCode} onChange={(e) => setForm({ ...form, hsnCode: e.target.value })} placeholder="e.g. 85184000" />
+                </div>
+              </div>
+
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide pt-2">Inventory</h3>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label>Manage Stock</Label>
+                  <Select value={form.manageStock ? "yes" : "no"} onValueChange={(v: string | null) => setForm({ ...form, manageStock: v === "yes" })}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="no" label="No">No</SelectItem>
+                      <SelectItem value="yes" label="Yes">Yes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Alert Qty</Label>
+                  <Input type="number" value={form.alertQuantity} onChange={(e) => setForm({ ...form, alertQuantity: e.target.value })} placeholder="0" disabled={!form.manageStock} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Current Stock</Label>
+                  <Input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="0" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-3 border-t border-border mt-4">
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button onClick={editingItem ? handleSave : handleSaveAndAddAnother} disabled={saving}>
+              {saving ? "Saving..." : editingItem ? "Update" : "Save & Add Another"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 md:gap-3">
