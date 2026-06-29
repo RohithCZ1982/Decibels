@@ -158,7 +158,7 @@ export default function TemplatesPage() {
           <h1 className="text-2xl font-bold">Project Templates</h1>
           <p className="text-sm text-muted-foreground mt-1">Reusable configurations for common setups</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen} disablePointerDismissal>
           <DialogTrigger>
             <Button onClick={openNew}>
               <Plus className="w-4 h-4 mr-2" /> New Template

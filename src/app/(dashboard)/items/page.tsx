@@ -364,7 +364,7 @@ export default function ItemsPage() {
             {totalItems > 0 ? `${totalItems} products` : "Manage products, services, and equipment"}
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(open) => { if (open) setDialogOpen(true); }}>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen} disablePointerDismissal>
           <DialogTrigger>
             <Button onClick={openNew}>
               <Plus className="w-4 h-4 mr-2" />
@@ -435,7 +435,7 @@ export default function ItemsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label>Category *</Label>
-                    <Select key={`cat-${form.categoryId}-${form.division}`} value={form.categoryId} onValueChange={(v: string | null) => {
+                    <Select labels={Object.fromEntries(formCategories.map((c) => [c.id, c.name]))} value={form.categoryId} onValueChange={(v: string | null) => {
                       const val = v || "";
                       const cat = formCategories.find((c) => c.id === val);
                       setForm({ ...form, categoryId: val, subCategoryId: "", hsnCode: cat?.hsnCode || form.hsnCode });
@@ -457,7 +457,7 @@ export default function ItemsPage() {
                   </div>
                   <div className="space-y-1">
                     <Label>Sub-Category</Label>
-                    <Select key={`sub-${form.subCategoryId || "none"}-${form.categoryId}`} value={form.subCategoryId || "none"} onValueChange={(v: string | null) => {
+                    <Select labels={Object.fromEntries(formSubCategories.map((s) => [s.id, s.name]))} value={form.subCategoryId || "none"} onValueChange={(v: string | null) => {
                       const val = v || "none";
                       const sub = formSubCategories.find((s) => s.id === val);
                       const cat = categories.find((c) => c.id === form.categoryId);
@@ -769,7 +769,7 @@ export default function ItemsPage() {
         </div>
       )}
       {/* Stock Adjustment Dialog */}
-      <Dialog open={stockDialogOpen} onOpenChange={setStockDialogOpen}>
+      <Dialog open={stockDialogOpen} onOpenChange={setStockDialogOpen} disablePointerDismissal>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Adjust Stock — {stockItem?.name}</DialogTitle>
@@ -819,7 +819,7 @@ export default function ItemsPage() {
       </Dialog>
 
       {/* Stock History Dialog */}
-      <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+      <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen} disablePointerDismissal>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Stock History — {historyItem?.name}</DialogTitle>

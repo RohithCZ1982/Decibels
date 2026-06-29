@@ -768,7 +768,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
             <Dialog open={paymentOpen} onOpenChange={(open) => {
               setPaymentOpen(open);
               if (!open) { setEditingPayment(null); }
-            }}>
+            }} disablePointerDismissal>
               <DialogTrigger render={<Button variant="outline" size="sm" onClick={() => {
                 setEditingPayment(null);
                 setPayForm({ amount: "", date: new Date().toISOString().split("T")[0], mode: "BANK_TRANSFER", transactionId: "", notes: "" });
@@ -874,7 +874,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
             <Dialog open={noteOpen} onOpenChange={(open) => {
               setNoteOpen(open);
               if (!open) { setEditingNote(null); setEditNoteContent(""); }
-            }}>
+            }} disablePointerDismissal>
               <DialogTrigger render={<Button variant="outline" size="sm" onClick={() => {
                 setEditingNote(null);
                 setNoteContent("");

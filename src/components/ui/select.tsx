@@ -11,8 +11,14 @@ const SelectLabelContext = React.createContext<{
   getLabel: (value: string) => string | undefined;
 }>({ register: () => {}, getLabel: () => undefined });
 
-function Select({ children, ...props }: SelectPrimitive.Root.Props<string>) {
+function Select({ children, labels, ...props }: SelectPrimitive.Root.Props<string> & { labels?: Record<string, string> }) {
   const mapRef = React.useRef(new Map<string, string>());
+
+  if (labels) {
+    for (const [k, v] of Object.entries(labels)) {
+      mapRef.current.set(k, v);
+    }
+  }
 
   const ctx = React.useMemo(() => ({
     register: (value: string, label: string) => { mapRef.current.set(value, label); },
@@ -146,11 +152,9 @@ function SelectItem({
 }: SelectPrimitive.Item.Props & { label?: string }) {
   const { register } = React.useContext(SelectLabelContext);
 
-  React.useEffect(() => {
-    if (value != null && label) {
-      register(String(value), label);
-    }
-  }, [value, label, register]);
+  if (value != null && label) {
+    register(String(value), label);
+  }
 
   return (
     <SelectPrimitive.Item

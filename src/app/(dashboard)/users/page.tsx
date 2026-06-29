@@ -87,7 +87,7 @@ export default function UsersPage() {
           <h1 className="text-2xl font-bold">User Management</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage admin and staff accounts</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen} disablePointerDismissal>
           <DialogTrigger>
             <Button><Plus className="w-4 h-4 mr-2" /> Add User</Button>
           </DialogTrigger>

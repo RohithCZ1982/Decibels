@@ -92,7 +92,7 @@ export default function CustomersPage() {
           <h1 className="text-2xl font-bold">Customers</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage your client database</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen} disablePointerDismissal>
           <DialogTrigger>
             <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" /> Add Customer</Button>
           </DialogTrigger>

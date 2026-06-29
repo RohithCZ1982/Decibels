@@ -353,7 +353,7 @@ export default function CategoriesPage() {
       )}
 
       {/* Category Dialog */}
-      <Dialog open={catDialogOpen} onOpenChange={setCatDialogOpen}>
+      <Dialog open={catDialogOpen} onOpenChange={setCatDialogOpen} disablePointerDismissal>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editingCat ? "Edit Category" : "Add Category"}</DialogTitle>
@@ -391,7 +391,7 @@ export default function CategoriesPage() {
       </Dialog>
 
       {/* Sub-category Dialog */}
-      <Dialog open={subDialogOpen} onOpenChange={setSubDialogOpen}>
+      <Dialog open={subDialogOpen} onOpenChange={setSubDialogOpen} disablePointerDismissal>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editingSub ? "Edit Sub-Category" : "Add Sub-Category"}</DialogTitle>

@@ -701,7 +701,7 @@ export default function EmployeesPage() {
       {/* ===== DIALOGS ===== */}
 
       {/* Employee Dialog */}
-      <Dialog open={empDialogOpen} onOpenChange={setEmpDialogOpen}>
+      <Dialog open={empDialogOpen} onOpenChange={setEmpDialogOpen} disablePointerDismissal>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{editingEmp ? "Edit Employee" : "Add Employee"}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
@@ -727,7 +727,7 @@ export default function EmployeesPage() {
       </Dialog>
 
       {/* Salary Dialog */}
-      <Dialog open={salDialogOpen} onOpenChange={setSalDialogOpen}>
+      <Dialog open={salDialogOpen} onOpenChange={setSalDialogOpen} disablePointerDismissal>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{editingSal ? "Edit Salary" : "Add Salary"}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
@@ -770,7 +770,7 @@ export default function EmployeesPage() {
       </Dialog>
 
       {/* Deduction Dialog */}
-      <Dialog open={dedDialogOpen} onOpenChange={setDedDialogOpen}>
+      <Dialog open={dedDialogOpen} onOpenChange={setDedDialogOpen} disablePointerDismissal>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{editingDed ? "Edit Deduction" : "Add Deduction"}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
@@ -848,7 +848,7 @@ export default function EmployeesPage() {
       </Dialog>
 
       {/* Advance Dialog */}
-      <Dialog open={advDialogOpen} onOpenChange={setAdvDialogOpen}>
+      <Dialog open={advDialogOpen} onOpenChange={setAdvDialogOpen} disablePointerDismissal>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{editingAdv ? "Edit Advance" : "Add Advance Salary"}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
