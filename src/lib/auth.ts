@@ -4,7 +4,10 @@ import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { Role } from "@/generated/prisma/client";
 
-const JWT_SECRET = process.env.NEXTAUTH_SECRET || "fallback-secret";
+if (!process.env.NEXTAUTH_SECRET) {
+  throw new Error("NEXTAUTH_SECRET environment variable is required");
+}
+const JWT_SECRET = process.env.NEXTAUTH_SECRET;
 
 export interface SessionUser {
   id: string;

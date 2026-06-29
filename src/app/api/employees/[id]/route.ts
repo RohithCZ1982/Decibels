@@ -17,6 +17,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json();
     const { name, mobile, email, role, baseSalary, advanceLimit, joinDate, active } = body;
 
+    const existing = await prisma.employee.findUnique({ where: { id } });
+    if (!existing) return errorResponse("Employee not found", 404);
+
     const employee = await prisma.employee.update({
       where: { id },
       data: {
@@ -37,6 +40,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withAuth(async () => {
     const { id } = await params;
+    const existing = await prisma.employee.findUnique({ where: { id } });
+    if (!existing) return errorResponse("Employee not found", 404);
     await prisma.employee.update({ where: { id }, data: { active: false } });
     return jsonResponse({ success: true });
   }, "ADMIN");

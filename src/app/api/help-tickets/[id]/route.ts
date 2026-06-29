@@ -15,6 +15,8 @@ export async function PATCH(
     if (!VALID_STATUSES.includes(status)) {
       return errorResponse("Invalid status");
     }
+    const existing = await prisma.helpTicket.findUnique({ where: { id } });
+    if (!existing) return errorResponse("Ticket not found", 404);
     const ticket = await prisma.helpTicket.update({
       where: { id },
       data: { status },
@@ -30,6 +32,8 @@ export async function DELETE(
 ) {
   return withAuth(async () => {
     const { id } = await params;
+    const existing = await prisma.helpTicket.findUnique({ where: { id } });
+    if (!existing) return errorResponse("Ticket not found", 404);
     await prisma.helpTicket.delete({ where: { id } });
     return jsonResponse({ success: true });
   });

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth, jsonResponse, errorResponse } from "@/lib/api-helpers";
+import { withAuth, jsonResponse, errorResponse, isValidNumber } from "@/lib/api-helpers";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withAuth(async () => {
@@ -25,6 +25,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       purchasePrice, purchasePriceInclTax, profitMargin,
       manageStock, alertQuantity, division,
     } = body;
+
+    if (unitPrice != null && !isValidNumber(unitPrice)) {
+      return errorResponse("Unit price must be a valid number");
+    }
+    if (gstRate !== undefined && !isValidNumber(gstRate)) {
+      return errorResponse("GST rate must be a valid number");
+    }
 
     const existing = await prisma.item.findUnique({ where: { id } });
     if (!existing) return errorResponse("Item not found", 404);
@@ -68,6 +75,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withAuth(async () => {
     const { id } = await params;
+    const existing = await prisma.item.findUnique({ where: { id } });
+    if (!existing) return errorResponse("Item not found", 404);
     await prisma.item.update({ where: { id }, data: { active: false } });
     return jsonResponse({ success: true });
   }, "ADMIN");

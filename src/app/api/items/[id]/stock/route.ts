@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth, jsonResponse, errorResponse } from "@/lib/api-helpers";
+import { withAuth, jsonResponse, errorResponse, isValidPositiveNumber } from "@/lib/api-helpers";
 import { StockTransactionType } from "@/generated/prisma/client";
 
 const STOCK_IN_TYPES: StockTransactionType[] = ["PURCHASE_IN", "INITIAL"];
@@ -30,8 +30,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const body = await request.json();
     const { type, quantity, notes } = body;
 
-    if (!type || !quantity || quantity <= 0) {
-      return errorResponse("Type and positive quantity are required");
+    if (!type || !isValidPositiveNumber(quantity)) {
+      return errorResponse("Type and a valid positive quantity are required");
     }
 
     const validTypes: StockTransactionType[] = ["PURCHASE_IN", "ADJUSTMENT", "INITIAL", "RETURN"];

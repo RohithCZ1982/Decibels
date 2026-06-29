@@ -1,13 +1,13 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth, jsonResponse, errorResponse } from "@/lib/api-helpers";
+import { withAuth, jsonResponse, errorResponse, clampLimit } from "@/lib/api-helpers";
 
 export async function GET(request: NextRequest) {
   return withAuth(async () => {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
     const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "50");
+    const limit = clampLimit(parseInt(searchParams.get("limit") || "50"));
 
     const where = search
       ? {

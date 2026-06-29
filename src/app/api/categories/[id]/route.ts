@@ -8,6 +8,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json();
     const { name, hsnCode, order, division } = body;
 
+    const existing = await prisma.category.findUnique({ where: { id } });
+    if (!existing) return errorResponse("Category not found", 404);
+
     const category = await prisma.category.update({
       where: { id },
       data: {
@@ -24,6 +27,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withAuth(async () => {
     const { id } = await params;
+    const existing = await prisma.category.findUnique({ where: { id } });
+    if (!existing) return errorResponse("Category not found", 404);
     await prisma.subCategory.updateMany({ where: { categoryId: id }, data: { deleted: true } });
     await prisma.category.update({ where: { id }, data: { deleted: true } });
     return jsonResponse({ success: true });

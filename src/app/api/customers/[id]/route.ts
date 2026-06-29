@@ -23,9 +23,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   return withAuth(async () => {
     const { id } = await params;
     const body = await request.json();
+    const { name, mobile, email, address, notes } = body;
+
+    const existing = await prisma.customer.findUnique({ where: { id } });
+    if (!existing) return errorResponse("Customer not found", 404);
+
     const customer = await prisma.customer.update({
       where: { id },
-      data: body,
+      data: {
+        ...(name !== undefined && { name }),
+        ...(mobile !== undefined && { mobile }),
+        ...(email !== undefined && { email: email || null }),
+        ...(address !== undefined && { address: address || null }),
+        ...(notes !== undefined && { notes: notes || null }),
+      },
     });
     return jsonResponse(customer);
   });

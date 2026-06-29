@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth";
-import { withAuth, jsonResponse, errorResponse } from "@/lib/api-helpers";
+import { withAuth, jsonResponse, errorResponse, validateEnum } from "@/lib/api-helpers";
+import { Role } from "@/generated/prisma/client";
 
 export async function GET() {
   return withAuth(async () => {
@@ -20,6 +21,9 @@ export async function POST(request: NextRequest) {
 
     if (!name || !email || !password) {
       return errorResponse("Name, email, and password are required");
+    }
+    if (role && !validateEnum(role, Object.values(Role))) {
+      return errorResponse("Invalid role. Must be ADMIN or STAFF");
     }
 
     const existing = await prisma.user.findUnique({ where: { email } });

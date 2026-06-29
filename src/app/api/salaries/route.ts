@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth, jsonResponse, errorResponse } from "@/lib/api-helpers";
+import { withAuth, jsonResponse, errorResponse, isValidNumber, isValidPositiveNumber } from "@/lib/api-helpers";
 
 export async function GET(request: NextRequest) {
   return withAuth(async () => {
@@ -33,6 +33,13 @@ export async function POST(request: NextRequest) {
 
     if (!employeeId || !month || !year || amount == null) {
       return errorResponse("Employee, month, year, and amount are required");
+    }
+    if (!isValidNumber(amount)) {
+      return errorResponse("Amount must be a valid number");
+    }
+    const m = parseInt(month);
+    if (m < 1 || m > 12) {
+      return errorResponse("Month must be between 1 and 12");
     }
 
     const existing = await prisma.salary.findUnique({

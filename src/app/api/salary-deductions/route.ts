@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth, jsonResponse, errorResponse } from "@/lib/api-helpers";
+import { withAuth, jsonResponse, errorResponse, isValidPositiveNumber, isValidDate } from "@/lib/api-helpers";
 
 export async function GET(request: NextRequest) {
   return withAuth(async () => {
@@ -44,6 +44,12 @@ export async function POST(request: NextRequest) {
 
     if (!employeeId || !amount || !reason) {
       return errorResponse("Employee, amount, and reason are required");
+    }
+    if (!isValidPositiveNumber(amount)) {
+      return errorResponse("Amount must be a valid positive number");
+    }
+    if (date && !isValidDate(date)) {
+      return errorResponse("Invalid date format");
     }
 
     const parsedAmount = parseFloat(amount);

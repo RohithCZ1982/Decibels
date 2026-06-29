@@ -1,12 +1,23 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth, jsonResponse, errorResponse } from "@/lib/api-helpers";
+import { withAuth, jsonResponse, errorResponse, isValidNumber, isValidDate, validateEnum } from "@/lib/api-helpers";
+import { PaymentMode } from "@/generated/prisma/client";
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ paymentId: string }> }) {
   return withAuth(async () => {
     const { paymentId } = await params;
     const body = await request.json();
     const { amount, date, mode, transactionId, notes } = body;
+
+    if (amount !== undefined && !isValidNumber(amount)) {
+      return errorResponse("Amount must be a valid number");
+    }
+    if (date && !isValidDate(date)) {
+      return errorResponse("Invalid date format");
+    }
+    if (mode && !validateEnum(mode, Object.values(PaymentMode))) {
+      return errorResponse("Invalid payment mode");
+    }
 
     const existing = await prisma.payment.findUnique({ where: { id: paymentId } });
     if (!existing) return errorResponse("Payment not found", 404);

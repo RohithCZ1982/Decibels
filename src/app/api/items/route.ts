@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth, jsonResponse, errorResponse } from "@/lib/api-helpers";
+import { withAuth, jsonResponse, errorResponse, clampLimit, isValidNumber } from "@/lib/api-helpers";
 
 export async function GET(request: NextRequest) {
   return withAuth(async () => {
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     const brand = searchParams.get("brand");
     const division = searchParams.get("division");
     const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "50");
+    const limit = clampLimit(parseInt(searchParams.get("limit") || "50"));
     const all = searchParams.get("all") === "true";
 
     const where: Record<string, unknown> = { active: true };
@@ -71,6 +71,15 @@ export async function POST(request: NextRequest) {
 
     if (!code || !name || !categoryId || unitPrice == null) {
       return errorResponse("Code, name, category, and unit price are required");
+    }
+    if (!isValidNumber(unitPrice)) {
+      return errorResponse("Unit price must be a valid number");
+    }
+    if (purchasePrice != null && !isValidNumber(purchasePrice)) {
+      return errorResponse("Purchase price must be a valid number");
+    }
+    if (gstRate != null && !isValidNumber(gstRate)) {
+      return errorResponse("GST rate must be a valid number");
     }
 
     const existing = await prisma.item.findUnique({ where: { code } });

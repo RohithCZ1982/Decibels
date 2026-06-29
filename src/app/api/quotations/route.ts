@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth, jsonResponse, errorResponse } from "@/lib/api-helpers";
+import { withAuth, jsonResponse, errorResponse, clampLimit, isValidDate, validateEnum } from "@/lib/api-helpers";
 import { calculateQuotationTotals, generateQuotationNumber } from "@/lib/quotation-calc";
+import { QuotationStatus } from "@/generated/prisma/client";
 
 export async function GET(request: NextRequest) {
   return withAuth(async () => {
@@ -9,10 +10,15 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status");
     const search = searchParams.get("search") || "";
     const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
+    const limit = clampLimit(parseInt(searchParams.get("limit") || "20"));
 
     const where: Record<string, unknown> = {};
-    if (status) where.status = status;
+    if (status) {
+      if (!validateEnum(status, Object.values(QuotationStatus))) {
+        return errorResponse("Invalid status value");
+      }
+      where.status = status;
+    }
     if (search) {
       where.OR = [
         { quotationNumber: { contains: search, mode: "insensitive" } },
@@ -55,6 +61,12 @@ export async function POST(request: NextRequest) {
     if (!customerId || !items || items.length === 0) {
       return errorResponse("Customer and at least one item are required");
     }
+    if (billDate && !isValidDate(billDate)) {
+      return errorResponse("Invalid bill date format");
+    }
+    if (validUntil && !isValidDate(validUntil)) {
+      return errorResponse("Invalid valid-until date format");
+    }
 
     const disc = discount ?? 0;
     const calc = calculateQuotationTotals({
@@ -72,9 +84,16 @@ export async function POST(request: NextRequest) {
         return errorResponse("This quotation number is already in use");
       }
     } else {
+      const MAX_RETRIES = 5;
       quotationNumber = generateQuotationNumber();
-      const existing = await prisma.quotation.findUnique({ where: { quotationNumber } });
-      if (existing) quotationNumber = generateQuotationNumber();
+      for (let i = 0; i < MAX_RETRIES; i++) {
+        const existing = await prisma.quotation.findUnique({ where: { quotationNumber } });
+        if (!existing) break;
+        quotationNumber = generateQuotationNumber();
+        if (i === MAX_RETRIES - 1) {
+          return errorResponse("Could not generate a unique quotation number. Please try again.", 500);
+        }
+      }
     }
 
     const quotation = await prisma.quotation.create({
