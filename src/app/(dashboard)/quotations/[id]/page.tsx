@@ -44,9 +44,11 @@ import {
   Edit2,
   ClipboardList,
   Undo2,
+  FileSpreadsheet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { generateQuotationPDF, generateItemListPDF } from "@/lib/pdf-generator";
+import { generateQuotationExcel } from "@/lib/excel-generator";
 import { LineItemEditor, nextLineItemKey, emptyLineItem, type LineItem, type CatalogItem } from "@/components/line-item-editor";
 import { calculateQuotationTotals, EDITABLE_STATUSES, INVOICE_STATUSES } from "@/lib/quotation-calc";
 
@@ -426,6 +428,11 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
     await generateItemListPDF(quotation);
   };
 
+  const handleDownloadExcel = () => {
+    if (!quotation) return;
+    generateQuotationExcel(quotation);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -504,6 +511,9 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
               )}
               <Button variant="outline" size="icon" className="h-8 w-8 md:h-9 md:w-auto md:px-3" onClick={handleDownloadPDF} title="Download PDF">
                 <Download className="w-4 h-4 md:mr-2" /> <span className="hidden md:inline">PDF</span>
+              </Button>
+              <Button variant="outline" size="icon" className="h-8 w-8 md:h-9 md:w-auto md:px-3" onClick={handleDownloadExcel} title="Download Excel">
+                <FileSpreadsheet className="w-4 h-4 md:mr-2" /> <span className="hidden md:inline">Excel</span>
               </Button>
               <Button variant="outline" size="icon" className="h-8 w-8 md:h-9 md:w-auto md:px-3" onClick={handleItemListPDF} title="Item List">
                 <ClipboardList className="w-4 h-4 md:mr-2" /> <span className="hidden md:inline">Item List</span>
