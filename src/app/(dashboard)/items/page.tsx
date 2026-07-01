@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Search, Edit2, Trash2, Package, PackagePlus, History } from "lucide-react";
 import { toast } from "sonner";
@@ -127,7 +128,6 @@ export default function ItemsPage() {
   const [selectedDivision, setSelectedDivision] = useState<string>("pending");
   const [selectedCategory, setSelectedCategory] = useState<string>("pending");
   const [selectedSubCategory, setSelectedSubCategory] = useState<string>("all");
-  const [selectedBrand, setSelectedBrand] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
@@ -190,9 +190,8 @@ export default function ItemsPage() {
     if (selectedDivision && selectedDivision !== "all" && selectedDivision !== "pending") params.set("divisionId", selectedDivision);
     if (selectedCategory && selectedCategory !== "all" && selectedCategory !== "pending") params.set("categoryId", selectedCategory);
     if (selectedSubCategory && selectedSubCategory !== "all") params.set("subCategoryId", selectedSubCategory);
-    if (selectedBrand && selectedBrand !== "all") params.set("brand", selectedBrand);
     return params;
-  }, [search, selectedDivision, selectedCategory, selectedSubCategory, selectedBrand]);
+  }, [search, selectedDivision, selectedCategory, selectedSubCategory]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -704,37 +703,41 @@ export default function ItemsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2 md:gap-3">
-        <div className="relative flex-1 min-w-[180px] md:min-w-[240px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search items..."
-            className="pl-10"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value);}}
-          />
-        </div>
-        <Select labels={Object.fromEntries(divisions.map((d) => [d.id, d.name]))} value={selectedDivision} onValueChange={(v: string | null) => {
-          const div = v || divisions[0]?.id || "all";
+      {/* Division Tabs */}
+      <Tabs
+        value={selectedDivision === "pending" ? divisions[0]?.id || "all" : selectedDivision}
+        onValueChange={(v: string | null) => {
+          const div = v || "all";
           setSelectedDivision(div);
           const divCats = categories.filter((c) => div === "all" || c.divisionId === div);
           setSelectedCategory(divCats.length > 0 ? divCats[0].id : "all");
           setSelectedSubCategory("all");
-        }}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="All Divisions" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all" label="All Divisions">All Divisions</SelectItem>
-            {divisions.map((d) => <SelectItem key={d.id} value={d.id} label={d.name}>{d.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        }}
+      >
+        <TabsList variant="line" className="h-auto flex-wrap justify-start">
+          <TabsTrigger value="all">All Divisions</TabsTrigger>
+          {divisions.map((d) => (
+            <TabsTrigger key={d.id} value={d.id}>{d.name}</TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 md:gap-3">
+        <div className="relative min-w-[140px] max-w-[220px] flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search items..."
+            className="pl-10 text-sm"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value);}}
+          />
+        </div>
         <Select value={selectedCategory} onValueChange={(v: string | null) => {
           setSelectedCategory(v || "all");
           setSelectedSubCategory("all");
         }}>
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="min-w-[200px]">
             <SelectValue placeholder="All Categories" />
           </SelectTrigger>
           <SelectContent>
@@ -750,28 +753,13 @@ export default function ItemsPage() {
           <Select value={selectedSubCategory} onValueChange={(v: string | null) => {
             setSelectedSubCategory(v || "all");
             }}>
-            <SelectTrigger className="w-[220px]">
+            <SelectTrigger className="min-w-[220px]">
               <SelectValue placeholder="All Sub-Categories" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all" label="All Sub-Categories">All Sub-Categories</SelectItem>
               {filterSubCategories.map((s) => (
                 <SelectItem key={s.id} value={s.id} label={s.name}>{s.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        {brands.length > 0 && (
-          <Select value={selectedBrand} onValueChange={(v: string | null) => {
-            setSelectedBrand(v || "all");
-            }}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="All Brands" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" label="All Brands">All Brands</SelectItem>
-              {brands.sort().map((b) => (
-                <SelectItem key={b} value={b} label={b}>{b}</SelectItem>
               ))}
             </SelectContent>
           </Select>
