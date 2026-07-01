@@ -23,6 +23,7 @@ interface Customer {
   mobile: string;
   email: string | null;
   address: string | null;
+  gstNumber: string | null;
   notes: string | null;
   _count?: { quotations: number };
 }
@@ -33,7 +34,7 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
-  const [form, setForm] = useState({ name: "", mobile: "", email: "", address: "", notes: "" });
+  const [form, setForm] = useState({ name: "", mobile: "", email: "", address: "", gstNumber: "", notes: "" });
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -51,18 +52,26 @@ export default function CustomersPage() {
 
   const openNew = () => {
     setEditing(null);
-    setForm({ name: "", mobile: "", email: "", address: "", notes: "" });
+    setForm({ name: "", mobile: "", email: "", address: "", gstNumber: "", notes: "" });
     setDialogOpen(true);
   };
 
   const openEdit = (c: Customer) => {
     setEditing(c);
-    setForm({ name: c.name, mobile: c.mobile, email: c.email || "", address: c.address || "", notes: c.notes || "" });
+    setForm({ name: c.name, mobile: c.mobile, email: c.email || "", address: c.address || "", gstNumber: c.gstNumber || "", notes: c.notes || "" });
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
     if (!form.name || !form.mobile) { toast.error("Name and mobile are required"); return; }
+    const mobileDigits = form.mobile.replace(/\D/g, "");
+    const mobileLocal = mobileDigits.length === 12 && mobileDigits.startsWith("91") ? mobileDigits.slice(2) : mobileDigits;
+    if (!/^[6-9]\d{9}$/.test(mobileLocal)) { toast.error("Enter a valid 10-digit mobile number"); return; }
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) { toast.error("Enter a valid email address"); return; }
+    if (form.gstNumber && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(form.gstNumber.toUpperCase())) {
+      toast.error("Enter a valid 15-character GST number");
+      return;
+    }
     setSaving(true);
 
     const url = editing ? `/api/customers/${editing.id}` : "/api/customers";
@@ -114,6 +123,10 @@ export default function CustomersPage() {
                   <Label>Email</Label>
                   <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="john@example.com" />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label>GST Number</Label>
+                <Input value={form.gstNumber} onChange={(e) => setForm({ ...form, gstNumber: e.target.value.toUpperCase() })} placeholder="e.g. 29ABCDE1234F1Z5" />
               </div>
               <div className="space-y-2">
                 <Label>Address</Label>

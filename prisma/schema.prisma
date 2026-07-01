@@ -177,6 +177,7 @@ model Customer {
   mobile    String
   email     String?
   address   String?
+  gstNumber String?
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

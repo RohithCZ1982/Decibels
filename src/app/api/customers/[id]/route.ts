@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth, jsonResponse, errorResponse } from "@/lib/api-helpers";
+import { withAuth, jsonResponse, errorResponse, isValidEmail, isValidMobile, isValidGSTNumber } from "@/lib/api-helpers";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withAuth(async () => {
@@ -23,10 +23,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   return withAuth(async () => {
     const { id } = await params;
     const body = await request.json();
-    const { name, mobile, email, address, notes } = body;
+    const { name, mobile, email, address, gstNumber, notes } = body;
 
     const existing = await prisma.customer.findUnique({ where: { id } });
     if (!existing) return errorResponse("Customer not found", 404);
+
+    if (mobile !== undefined && !isValidMobile(mobile)) return errorResponse("Enter a valid 10-digit mobile number");
+    if (email && !isValidEmail(email)) return errorResponse("Enter a valid email address");
+    if (gstNumber && !isValidGSTNumber(gstNumber)) return errorResponse("Enter a valid 15-character GST number");
 
     const customer = await prisma.customer.update({
       where: { id },
@@ -35,6 +39,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         ...(mobile !== undefined && { mobile }),
         ...(email !== undefined && { email: email || null }),
         ...(address !== undefined && { address: address || null }),
+        ...(gstNumber !== undefined && { gstNumber: gstNumber || null }),
         ...(notes !== undefined && { notes: notes || null }),
       },
     });

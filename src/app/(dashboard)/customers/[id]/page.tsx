@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Phone, Mail, MapPin, FileText } from "lucide-react";
+import { ArrowLeft, Phone, Mail, MapPin, FileText, Receipt } from "lucide-react";
 import Link from "next/link";
 
 interface CustomerDetail {
@@ -14,6 +14,7 @@ interface CustomerDetail {
   mobile: string;
   email: string | null;
   address: string | null;
+  gstNumber: string | null;
   notes: string | null;
   quotations: Array<{
     id: string;
@@ -94,6 +95,12 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               <div className="flex items-start gap-2">
                 <MapPin className="w-4 h-4 text-muted-foreground mt-0.5" />
                 <span>{customer.address}</span>
+              </div>
+            )}
+            {customer.gstNumber && (
+              <div className="flex items-center gap-2">
+                <Receipt className="w-4 h-4 text-muted-foreground" />
+                <span>{customer.gstNumber}</span>
               </div>
             )}
             {customer.notes && (

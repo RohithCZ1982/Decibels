@@ -137,6 +137,16 @@ export default function NewQuotationPage() {
         toast.error("Customer name and mobile are required");
         return;
       }
+      const mobileDigits = newCustMobile.replace(/\D/g, "");
+      const mobileLocal = mobileDigits.length === 12 && mobileDigits.startsWith("91") ? mobileDigits.slice(2) : mobileDigits;
+      if (!/^[6-9]\d{9}$/.test(mobileLocal)) {
+        toast.error("Enter a valid 10-digit mobile number");
+        return;
+      }
+      if (newCustEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newCustEmail)) {
+        toast.error("Enter a valid email address");
+        return;
+      }
       setSaving(true);
       const custRes = await fetch("/api/customers", {
         method: "POST",
@@ -144,7 +154,8 @@ export default function NewQuotationPage() {
         body: JSON.stringify({ name: newCustName, mobile: newCustMobile, email: newCustEmail }),
       });
       if (!custRes.ok) {
-        toast.error("Failed to create customer");
+        const custErr = await custRes.json().catch(() => null);
+        toast.error(custErr?.error || "Failed to create customer");
         setSaving(false);
         return;
       }

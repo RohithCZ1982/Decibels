@@ -25,6 +25,7 @@ interface QuotationData {
     mobile: string;
     email: string | null;
     address: string | null;
+    gstNumber?: string | null;
   };
   items: Array<{
     name: string;
@@ -221,6 +222,7 @@ function buildQuotationSheet(wb: ExcelJS.Workbook, q: QuotationData, isInvoice: 
   ];
   if (q.customer.email) custFields.push(["Email", q.customer.email]);
   if (q.customer.address) custFields.push(["Address", q.customer.address]);
+  if (q.customer.gstNumber) custFields.push(["GSTIN", q.customer.gstNumber]);
 
   for (const [label, value] of custFields) {
     const lc = ws.getCell(row, 1);

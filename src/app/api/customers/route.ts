@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth, jsonResponse, errorResponse, clampLimit } from "@/lib/api-helpers";
+import { withAuth, jsonResponse, errorResponse, clampLimit, isValidEmail, isValidMobile, isValidGSTNumber } from "@/lib/api-helpers";
 
 export async function GET(request: NextRequest) {
   return withAuth(async () => {
@@ -37,12 +37,15 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return withAuth(async () => {
     const body = await request.json();
-    const { name, mobile, email, address, notes } = body;
+    const { name, mobile, email, address, gstNumber, notes } = body;
 
     if (!name || !mobile) return errorResponse("Name and mobile are required");
+    if (!isValidMobile(mobile)) return errorResponse("Enter a valid 10-digit mobile number");
+    if (email && !isValidEmail(email)) return errorResponse("Enter a valid email address");
+    if (gstNumber && !isValidGSTNumber(gstNumber)) return errorResponse("Enter a valid 15-character GST number");
 
     const customer = await prisma.customer.create({
-      data: { name, mobile, email, address, notes },
+      data: { name, mobile, email, address, gstNumber, notes },
     });
     return jsonResponse(customer, 201);
   });

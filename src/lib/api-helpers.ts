@@ -49,6 +49,23 @@ export function isValidDate(value: unknown): boolean {
   return !isNaN(d.getTime());
 }
 
+export function isValidEmail(value: unknown): boolean {
+  if (typeof value !== "string" || !value) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+export function isValidMobile(value: unknown): boolean {
+  if (typeof value !== "string" || !value) return false;
+  const digits = value.replace(/\D/g, "");
+  const local = digits.length === 12 && digits.startsWith("91") ? digits.slice(2) : digits;
+  return /^[6-9]\d{9}$/.test(local);
+}
+
+export function isValidGSTNumber(value: unknown): boolean {
+  if (typeof value !== "string" || !value) return false;
+  return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(value.toUpperCase());
+}
+
 export function validateEnum<T extends string>(
   value: unknown,
   validValues: readonly T[]

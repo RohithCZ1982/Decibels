@@ -76,7 +76,7 @@ interface QuotationDetail {
   completionDate: string | null;
   billDate: string | null;
   createdAt: string;
-  customer: { id: string; name: string; mobile: string; email: string | null; address: string | null };
+  customer: { id: string; name: string; mobile: string; email: string | null; address: string | null; gstNumber: string | null };
   template: { name: string } | null;
   createdBy: { name: string };
   items: Array<{
@@ -593,6 +593,7 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
             <p className="text-muted-foreground">{quotation.customer.mobile}</p>
             {quotation.customer.email && <p className="text-muted-foreground">{quotation.customer.email}</p>}
             {quotation.customer.address && <p className="text-muted-foreground">{quotation.customer.address}</p>}
+            {quotation.customer.gstNumber && <p className="text-muted-foreground">GSTIN: {quotation.customer.gstNumber}</p>}
           </CardContent>
         </Card>
 

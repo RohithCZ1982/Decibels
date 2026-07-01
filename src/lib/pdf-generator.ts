@@ -27,6 +27,7 @@ interface QuotationData {
     mobile: string;
     email: string | null;
     address: string | null;
+    gstNumber?: string | null;
   };
   items: Array<{
     name: string;
@@ -350,6 +351,7 @@ function drawQuotationPage(
     { label: "Mobile", value: q.customer.mobile || "" },
     { label: "Email", value: q.customer.email || "" },
     { label: "Address", value: q.customer.address || "" },
+    ...(q.customer.gstNumber ? [{ label: "GSTIN", value: q.customer.gstNumber }] : []),
   ];
   for (const field of custFields) {
     doc.setFontSize(field.bold ? 9 : 8);
