@@ -51,6 +51,13 @@ interface QuotationData {
   }>;
 }
 
+interface BankDetailData {
+  name: string;
+  bankName: string;
+  ifscCode: string;
+  accountNumber: string;
+}
+
 const PINK = "C8323C";
 const PINK_LIGHT = "E1646E";
 const BLACK = "1E1E1E";
@@ -105,7 +112,7 @@ async function loadImageBase64(src: string): Promise<string> {
   }
 }
 
-export async function generateQuotationExcel(data: QuotationData) {
+export async function generateQuotationExcel(data: QuotationData, bankDetail?: BankDetailData | null) {
   const wb = new ExcelJS.Workbook();
   const isInvoice = data.status && INVOICE_STATUSES.includes(data.status);
 
@@ -114,7 +121,7 @@ export async function generateQuotationExcel(data: QuotationData) {
     loadImageBase64("/25years.png"),
   ]);
 
-  buildQuotationSheet(wb, data, !!isInvoice, logoB64, badgeB64);
+  buildQuotationSheet(wb, data, !!isInvoice, logoB64, badgeB64, bankDetail);
 
   if (data.payments && data.payments.length > 0) {
     buildPaymentsSheet(wb, data);
@@ -124,7 +131,7 @@ export async function generateQuotationExcel(data: QuotationData) {
   saveAs(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `${data.quotationNumber}.xlsx`);
 }
 
-function buildQuotationSheet(wb: ExcelJS.Workbook, q: QuotationData, isInvoice: boolean, logoB64: string, badgeB64: string) {
+function buildQuotationSheet(wb: ExcelJS.Workbook, q: QuotationData, isInvoice: boolean, logoB64: string, badgeB64: string, bankDetail?: BankDetailData | null) {
   const ws = wb.addWorksheet("Quotation");
 
   ws.columns = [
@@ -302,18 +309,20 @@ function buildQuotationSheet(wb: ExcelJS.Workbook, q: QuotationData, isInvoice: 
       const catTotal = catItems.reduce((s, i) => s + i.total, 0);
 
       // Category header
-      ws.mergeCells(row, 1, row, lastCol);
-      const cc = ws.getCell(row, 1);
-      cc.value = catName;
-      cc.font = boldFont(9, PINK);
-      cc.fill = fillBg(CREAM);
-      applyBorder(cc);
-      row++;
+      if (catName !== "Other") {
+        ws.mergeCells(row, 1, row, lastCol);
+        const cc = ws.getCell(row, 1);
+        cc.value = catName;
+        cc.font = boldFont(9, PINK);
+        cc.fill = fillBg(CREAM);
+        applyBorder(cc);
+        row++;
+      }
 
       // Items
       for (const item of catItems) {
         const desc = item.description || item.item?.description || item.notes || "";
-        const displayName = desc ? `${item.name}\n${desc}` : item.name;
+        const displayName = desc ? `${item.name}\n\n${desc}` : item.name;
         const discPct = item.discount || 0;
 
         const vals: (string | number)[] = [
@@ -346,7 +355,7 @@ function buildQuotationSheet(wb: ExcelJS.Workbook, q: QuotationData, isInvoice: 
           const nameCell = ws.getCell(row, 2);
           nameCell.value = {
             richText: [
-              { text: item.name + "\n", font: { bold: true, size: 9, name: "Calibri", color: { argb: BLACK } } },
+              { text: item.name + "\n\n", font: { bold: true, size: 9, name: "Calibri", color: { argb: BLACK } } },
               { text: desc, font: { size: 8, name: "Calibri", color: { argb: "666666" } } },
             ],
           };
@@ -438,6 +447,33 @@ function buildQuotationSheet(wb: ExcelJS.Workbook, q: QuotationData, isInvoice: 
   }
 
   row++;
+
+  // --- BANK DETAILS ---
+  if (bankDetail) {
+    ws.mergeCells(row, 1, row, lastCol);
+    const bc = ws.getCell(row, 1);
+    bc.value = "Bank Details:";
+    bc.font = boldFont(9, PINK);
+    row++;
+
+    const bankLines: [string, string][] = [
+      ["Name", bankDetail.name],
+      ["Bank", bankDetail.bankName],
+      ["IFSC Code", bankDetail.ifscCode],
+      ["Account Number", bankDetail.accountNumber],
+    ];
+    for (const [label, value] of bankLines) {
+      const lc = ws.getCell(row, 1);
+      lc.value = label;
+      lc.font = boldFont(9, "787878");
+      ws.mergeCells(row, 2, row, lastCol);
+      const vc = ws.getCell(row, 2);
+      vc.value = value;
+      vc.font = normalFont(9);
+      row++;
+    }
+    row++;
+  }
 
   // --- NOTES ---
   if (q.notes) {

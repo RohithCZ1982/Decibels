@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -129,6 +129,8 @@ export default function ItemsPage() {
   const [selectedSubCategory, setSelectedSubCategory] = useState<string>("all");
   const [selectedBrand, setSelectedBrand] = useState<string>("all");
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -160,21 +162,41 @@ export default function ItemsPage() {
 
   const { user } = useAuth();
 
-  const brands = Array.from(new Set(items.map((i) => i.brand).filter(Boolean))) as string[];
+  const brands = useMemo(
+    () => Array.from(new Set(items.map((i) => i.brand).filter(Boolean))) as string[],
+    [items]
+  );
 
-  const filterCategories = selectedDivision === "all" ? categories : categories.filter((c) => c.divisionId === selectedDivision);
-  const filterSubCategories = categories.find((c) => c.id === selectedCategory)?.subCategories || [];
+  const filterCategories = useMemo(
+    () => (selectedDivision === "all" ? categories : categories.filter((c) => c.divisionId === selectedDivision)),
+    [categories, selectedDivision]
+  );
+  const filterSubCategories = useMemo(
+    () => categories.find((c) => c.id === selectedCategory)?.subCategories || [],
+    [categories, selectedCategory]
+  );
 
-  const ctxCategories = categories.filter((c) => c.divisionId === ctxDivision);
-  const ctxSubCategories = categories.find((c) => c.id === ctxCategoryId)?.subCategories || [];
+  const ctxCategories = useMemo(
+    () => categories.filter((c) => c.divisionId === ctxDivision),
+    [categories, ctxDivision]
+  );
+  const ctxSubCategories = useMemo(
+    () => categories.find((c) => c.id === ctxCategoryId)?.subCategories || [],
+    [categories, ctxCategoryId]
+  );
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams({ search, limit: "9999" });
+  const buildItemsParams = useCallback((pageNum: number) => {
+    const params = new URLSearchParams({ search, limit: "100", page: String(pageNum) });
     if (selectedDivision && selectedDivision !== "all" && selectedDivision !== "pending") params.set("divisionId", selectedDivision);
     if (selectedCategory && selectedCategory !== "all" && selectedCategory !== "pending") params.set("categoryId", selectedCategory);
     if (selectedSubCategory && selectedSubCategory !== "all") params.set("subCategoryId", selectedSubCategory);
     if (selectedBrand && selectedBrand !== "all") params.set("brand", selectedBrand);
+    return params;
+  }, [search, selectedDivision, selectedCategory, selectedSubCategory, selectedBrand]);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    const params = buildItemsParams(1);
 
     const [itemsRes, catsRes, divsRes] = await Promise.all([
       fetch(`/api/items?${params}`),
@@ -206,8 +228,21 @@ export default function ItemsPage() {
 
     setItems(itemsData.items || []);
     setTotalItems(itemsData.total || 0);
+    setPage(1);
     setLoading(false);
-  }, [search, selectedDivision, selectedCategory, selectedSubCategory, selectedBrand]);
+  }, [buildItemsParams, selectedDivision, selectedCategory]);
+
+  const loadMore = useCallback(async () => {
+    const nextPage = page + 1;
+    setLoadingMore(true);
+    const params = buildItemsParams(nextPage);
+    const res = await fetch(`/api/items?${params}`);
+    const data = await res.json();
+    setItems((prev) => [...prev, ...(data.items || [])]);
+    setTotalItems(data.total || 0);
+    setPage(nextPage);
+    setLoadingMore(false);
+  }, [buildItemsParams, page]);
 
   useEffect(() => {
     loadData();
@@ -904,6 +939,13 @@ export default function ItemsPage() {
             </Card>
           ))}
 
+          {items.length < totalItems && (
+            <div className="flex justify-center pt-2">
+              <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? "Loading..." : `Load More (${items.length} of ${totalItems})`}
+              </Button>
+            </div>
+          )}
         </div>
       )}
       {/* Stock Adjustment Dialog */}

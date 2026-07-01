@@ -11,6 +11,7 @@ import {
   CreditCard,
   BarChart3,
   Settings,
+  SlidersHorizontal,
   LogOut,
   Layers,
   ChevronLeft,
@@ -39,6 +40,7 @@ const navigation = [
   { name: "Employees", href: "/employees", icon: UserCheck, adminOnly: true },
   { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Users", href: "/users", icon: Settings, adminOnly: true },
+  { name: "Settings", href: "/settings", icon: SlidersHorizontal, adminOnly: true },
   { name: "Help", href: "/help", icon: HelpCircle },
 ];
 

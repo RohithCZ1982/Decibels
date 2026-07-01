@@ -53,6 +53,13 @@ interface QuotationData {
   }>;
 }
 
+interface BankDetailData {
+  name: string;
+  bankName: string;
+  ifscCode: string;
+  accountNumber: string;
+}
+
 function formatINR(n: number): string {
   return new Intl.NumberFormat("en-IN", {
     maximumFractionDigits: 0,
@@ -87,7 +94,7 @@ function loadImage(src: string): Promise<string> {
 const PINK: [number, number, number] = [200, 50, 60];
 const BLACK: [number, number, number] = [30, 30, 30];
 
-export async function generateQuotationPDF(quotation: QuotationData) {
+export async function generateQuotationPDF(quotation: QuotationData, bankDetail?: BankDetailData | null) {
   const doc = new jsPDF("p", "mm", "a4");
 
   const [logoData, badgeData] = await Promise.all([
@@ -97,7 +104,7 @@ export async function generateQuotationPDF(quotation: QuotationData) {
 
   await registerPoppins(doc);
 
-  drawQuotationPage(doc, quotation, logoData, badgeData);
+  drawQuotationPage(doc, quotation, logoData, badgeData, bankDetail);
 
   if (quotation.payments && quotation.payments.length > 0) {
     doc.addPage();
@@ -279,7 +286,8 @@ function drawQuotationPage(
   doc: jsPDF,
   q: QuotationData,
   logoData: string,
-  badgeData: string
+  badgeData: string,
+  bankDetail?: BankDetailData | null
 ) {
   const pw = 210;
   const ml = 10;
@@ -427,14 +435,16 @@ function drawQuotationPage(
     });
 
     for (const group of groups) {
-      const catRow = Array(colCount).fill("");
-      catRow[1] = group.name;
-      tableBody.push(catRow);
-      tRowTypes.push("catHeader");
+      if (group.name !== "Other") {
+        const catRow = Array(colCount).fill("");
+        catRow[1] = group.name;
+        tableBody.push(catRow);
+        tRowTypes.push("catHeader");
+      }
 
       for (const item of group.items) {
         const desc = item.description || item.item?.description || item.notes || "";
-        const displayName = desc ? `${item.name}\n${desc}` : item.name;
+        const displayName = desc ? `${item.name}\n\n${desc}` : item.name;
         const discPct = item.discount || 0;
         const row = [
           sl.toString(),
@@ -475,22 +485,22 @@ function drawQuotationPage(
   const colStyles: Record<number, object> = hasAnyDiscount
     ? {
         0: { cellWidth: 10, halign: "center" },
-        1: { cellWidth: 60 },
+        1: { cellWidth: 76 },
         2: { cellWidth: 20, halign: "center", fontSize: 7 },
         3: { cellWidth: 13, halign: "center" },
         4: { cellWidth: 13, halign: "center" },
-        5: { cellWidth: 26, halign: "right" },
-        6: { cellWidth: 16, halign: "center" },
-        7: { cellWidth: 32, halign: "right" },
+        5: { cellWidth: 20, halign: "right" },
+        6: { cellWidth: 12, halign: "center" },
+        7: { cellWidth: 26, halign: "right" },
       }
     : {
         0: { cellWidth: 10, halign: "center" },
-        1: { cellWidth: 68 },
+        1: { cellWidth: 84 },
         2: { cellWidth: 22, halign: "center", fontSize: 7 },
         3: { cellWidth: 13, halign: "center" },
         4: { cellWidth: 13, halign: "center" },
-        5: { cellWidth: 30, halign: "right" },
-        6: { cellWidth: 34, halign: "right" },
+        5: { cellWidth: 20, halign: "right" },
+        6: { cellWidth: 28, halign: "right" },
       };
 
   autoTable(doc, {
@@ -551,16 +561,24 @@ function drawQuotationPage(
         }
         const nd = itemNameDesc[itemIdx];
         if (!nd) return;
-        const padding = data.cell.styles.cellPadding as { top: number; left: number };
+        const padding = data.cell.styles.cellPadding as { top: number; left: number; right: number };
         const x = data.cell.x + (padding?.left ?? 2);
-        const nameY = data.cell.y + (padding?.top ?? 2) + data.cell.styles.fontSize * 0.352;
+        const fontSize = data.cell.styles.fontSize;
+        const availW = data.cell.width - (padding?.left ?? 2) - (padding?.right ?? 2);
+        doc.setFontSize(fontSize);
+        doc.setFont("Poppins", "normal");
+        const nameLines: string[] = doc.splitTextToSize(nd.name, availW);
+        const lineH = fontSize * 0.352 * 1.15;
+        const rectTop = data.cell.y + (padding?.top ?? 2) - 1;
+        // When there's no description below, it's safe to white out the whole cell
+        // height (bounded by autoTable's own row sizing) instead of an approximated
+        // line-height guess, which can under-shoot and leave the old text peeking through.
+        const rectH = nd.desc ? nameLines.length * lineH + 1 : data.cell.height - (padding?.top ?? 2);
         doc.setFillColor(255, 255, 255);
-        doc.setFontSize(data.cell.styles.fontSize);
-        const nameW = doc.getTextWidth(nd.name) + 1;
-        doc.rect(x, data.cell.y + (padding?.top ?? 2) - 1, nameW, data.cell.styles.fontSize * 0.5, "F");
+        doc.rect(x, rectTop, availW, rectH, "F");
         doc.setTextColor(...BLACK);
         doc.setFont("Poppins", "bold");
-        doc.text(nd.name, x, nameY);
+        doc.text(nameLines, x, rectTop + 1 + fontSize * 0.352);
       }
     },
   });
@@ -599,6 +617,14 @@ function drawQuotationPage(
 
   summaryLines.push({ label: "Grand Total", value: formatINR(q.grandTotal), highlight: true });
 
+  // Keep the whole summary block together — move it to a new page rather than split it
+  const summaryHeight = summaryLines.reduce((h, l) => h + (l.highlight ? sumRH + 1 : sumRH), 0);
+  if (y + summaryHeight > 285) {
+    doc.addPage();
+    drawHeader(doc, logoData, badgeData);
+    y = 35;
+  }
+
   for (const row of summaryLines) {
     doc.setDrawColor(160, 160, 160);
     doc.setLineWidth(0.3);
@@ -629,6 +655,58 @@ function drawQuotationPage(
   }
 
   y += 6;
+
+  // --- Ensure trailing content (bank details, notes, footer) fits on this page ---
+  let trailingHeight = 0;
+  if (bankDetail) {
+    trailingHeight += 4.5 + 4 * 3.8 + 2;
+  }
+  if (q.notes) {
+    doc.setFontSize(7.5);
+    doc.setFont("Poppins", "italic");
+    let notesLines = 0;
+    for (const line of q.notes.split("\n")) {
+      if (!line.trim()) continue;
+      notesLines += doc.splitTextToSize(line.trim(), cw - 5).length;
+    }
+    trailingHeight += 4 + notesLines * 3.5 + 2;
+  }
+  trailingHeight += 4 + (isInvoice ? 4 : 0) + 10;
+
+  if (y + trailingHeight > 285) {
+    doc.addPage();
+    drawHeader(doc, logoData, badgeData);
+    y = 35;
+  }
+
+  // --- BANK DETAILS ---
+  if (bankDetail) {
+    doc.setFontSize(8);
+    doc.setFont("Poppins", "bold");
+    doc.setTextColor(...PINK);
+    doc.text("Bank Details:", ml, y);
+    y += 4.5;
+
+    const bankFields = [
+      { label: "Name", value: bankDetail.name },
+      { label: "Bank", value: bankDetail.bankName },
+      { label: "IFSC Code", value: bankDetail.ifscCode },
+      { label: "Account Number", value: bankDetail.accountNumber },
+    ];
+    doc.setFontSize(7.5);
+    doc.setFont("Poppins", "bold");
+    const labelW = Math.max(...bankFields.map((f) => doc.getTextWidth(f.label + " : ")));
+    for (const field of bankFields) {
+      doc.setFont("Poppins", "bold");
+      doc.setTextColor(120, 120, 120);
+      doc.text(field.label + " : ", ml + 2, y);
+      doc.setFont("Poppins", "normal");
+      doc.setTextColor(...BLACK);
+      doc.text(field.value, ml + 2 + labelW, y);
+      y += 3.8;
+    }
+    y += 2;
+  }
 
   // --- NOTES ---
   if (q.notes) {

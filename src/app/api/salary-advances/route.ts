@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
         employee: { select: { name: true, role: true } },
       },
       orderBy: { date: "desc" },
+      take: 1000,
     });
     return jsonResponse(advances);
   });

@@ -7,6 +7,7 @@ export async function GET() {
     const tickets = await prisma.helpTicket.findMany({
       include: { createdBy: { select: { name: true } } },
       orderBy: [{ createdAt: "asc" }],
+      take: 1000,
     });
     return jsonResponse(tickets);
   });

@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
         deductions: true,
       },
       orderBy: [{ year: "desc" }, { month: "desc" }],
+      take: 1000,
     });
     return jsonResponse(salaries);
   });

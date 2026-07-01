@@ -11,6 +11,7 @@ export async function GET() {
         _count: { select: { quotations: true } },
       },
       orderBy: { name: "asc" },
+      take: 500,
     });
     return jsonResponse(templates);
   });

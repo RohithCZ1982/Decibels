@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
         salary: { select: { month: true, year: true, amount: true } },
       },
       orderBy: { createdAt: "desc" },
+      take: 1000,
     });
     return jsonResponse(deductions);
   });

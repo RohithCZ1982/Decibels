@@ -266,6 +266,7 @@ model Payment {
   createdAt DateTime @default(now())
 
   @@index([quotationId])
+  @@index([date])
 }
 
 model ProjectNote {
@@ -375,6 +376,7 @@ model SalaryDeduction {
 
   @@index([employeeId])
   @@index([salaryId])
+  @@index([date])
 }
 
 model SalaryAdvance {
@@ -390,4 +392,19 @@ model SalaryAdvance {
   createdAt    DateTime @default(now())
 
   @@index([employeeId])
+  @@index([date])
+}
+
+model BankDetail {
+  id            String  @id @default(cuid())
+  name          String
+  bankName      String
+  ifscCode      String
+  accountNumber String
+  active        Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
 }

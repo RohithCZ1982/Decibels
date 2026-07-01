@@ -45,8 +45,12 @@ export async function GET() {
       where: {
         status: { in: ["APPROVED", "IN_PRODUCTION", "COMPLETED"] },
       },
-      include: {
-        customer: true,
+      select: {
+        id: true,
+        quotationNumber: true,
+        grandTotal: true,
+        status: true,
+        customer: { select: { name: true, mobile: true } },
         payments: { select: { amount: true } },
       },
     });

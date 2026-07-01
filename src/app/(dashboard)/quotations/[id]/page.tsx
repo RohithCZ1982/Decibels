@@ -47,10 +47,16 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { toast } from "sonner";
-import { generateQuotationPDF, generateItemListPDF } from "@/lib/pdf-generator";
-import { generateQuotationExcel } from "@/lib/excel-generator";
 import { LineItemEditor, nextLineItemKey, emptyLineItem, type LineItem, type CatalogItem, type DivisionOption } from "@/components/line-item-editor";
 import { calculateQuotationTotals, EDITABLE_STATUSES, INVOICE_STATUSES } from "@/lib/quotation-calc";
+
+interface BankDetail {
+  id: string;
+  name: string;
+  bankName: string;
+  ifscCode: string;
+  accountNumber: string;
+}
 
 interface QuotationDetail {
   id: string;
@@ -174,14 +180,17 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
   const [editDiscountInput, setEditDiscountInput] = useState("");
   const [allCatalogItems, setAllCatalogItems] = useState<CatalogItem[]>([]);
   const [divisions, setDivisions] = useState<DivisionOption[]>([]);
+  const [activeBankDetail, setActiveBankDetail] = useState<BankDetail | null>(null);
 
   const load = useCallback(async () => {
-    const [qRes, dRes] = await Promise.all([
+    const [qRes, dRes, bRes] = await Promise.all([
       fetch(`/api/quotations/${id}`),
       fetch("/api/divisions"),
+      fetch("/api/bank-details/active"),
     ]);
     if (qRes.ok) setQuotation(await qRes.json());
     if (dRes.ok) setDivisions(await dRes.json());
+    if (bRes.ok) setActiveBankDetail(await bRes.json());
     setLoading(false);
   }, [id]);
 
@@ -424,17 +433,20 @@ export default function QuotationDetailPage({ params }: { params: Promise<{ id: 
 
   const handleDownloadPDF = async () => {
     if (!quotation) return;
-    await generateQuotationPDF(quotation);
+    const { generateQuotationPDF } = await import("@/lib/pdf-generator");
+    await generateQuotationPDF(quotation, activeBankDetail);
   };
 
   const handleItemListPDF = async () => {
     if (!quotation) return;
+    const { generateItemListPDF } = await import("@/lib/pdf-generator");
     await generateItemListPDF(quotation);
   };
 
-  const handleDownloadExcel = () => {
+  const handleDownloadExcel = async () => {
     if (!quotation) return;
-    generateQuotationExcel(quotation);
+    const { generateQuotationExcel } = await import("@/lib/excel-generator");
+    generateQuotationExcel(quotation, activeBankDetail);
   };
 
   if (loading) {
