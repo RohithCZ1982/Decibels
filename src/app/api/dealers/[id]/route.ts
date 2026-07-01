@@ -5,7 +5,7 @@ import { withAuth, jsonResponse, errorResponse, isValidEmail, isValidMobile, isV
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withAuth(async () => {
     const { id } = await params;
-    const customer = await prisma.customer.findUnique({
+    const dealer = await prisma.customer.findUnique({
       where: { id },
       include: {
         quotations: {
@@ -14,8 +14,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         },
       },
     });
-    if (!customer || customer.type !== "CUSTOMER") return errorResponse("Customer not found", 404);
-    return jsonResponse(customer);
+    if (!dealer || dealer.type !== "DEALER") return errorResponse("Dealer not found", 404);
+    return jsonResponse(dealer);
   });
 }
 
@@ -26,13 +26,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { name, mobile, email, address, gstNumber, notes } = body;
 
     const existing = await prisma.customer.findUnique({ where: { id } });
-    if (!existing || existing.type !== "CUSTOMER") return errorResponse("Customer not found", 404);
+    if (!existing || existing.type !== "DEALER") return errorResponse("Dealer not found", 404);
 
     if (mobile !== undefined && !isValidMobile(mobile)) return errorResponse("Enter a valid 10-digit mobile number");
     if (email && !isValidEmail(email)) return errorResponse("Enter a valid email address");
     if (gstNumber && !isValidGSTNumber(gstNumber)) return errorResponse("Enter a valid 15-character GST number");
 
-    const customer = await prisma.customer.update({
+    const dealer = await prisma.customer.update({
       where: { id },
       data: {
         ...(name !== undefined && { name }),
@@ -43,6 +43,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         ...(notes !== undefined && { notes: notes || null }),
       },
     });
-    return jsonResponse(customer);
+    return jsonResponse(dealer);
   });
 }

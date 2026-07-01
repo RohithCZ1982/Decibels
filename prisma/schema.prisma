@@ -12,6 +12,11 @@ enum Role {
   STAFF
 }
 
+enum MemberType {
+  CUSTOMER
+  DEALER
+}
+
 enum QuotationStatus {
   DRAFT
   SENT
@@ -172,20 +177,22 @@ model TemplateItem {
 }
 
 model Customer {
-  id        String   @id @default(cuid())
+  id        String     @id @default(cuid())
   name      String
   mobile    String
   email     String?
   address   String?
   gstNumber String?
   notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  type      MemberType @default(CUSTOMER)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   quotations Quotation[]
 
   @@index([name])
   @@index([mobile])
+  @@index([type])
 }
 
 model Quotation {

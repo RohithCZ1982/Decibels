@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -39,9 +40,11 @@ function formatINR(n: number) {
 
 export default function NewQuotationPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [allItems, setAllItems] = useState<CatalogItem[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [dealers, setDealers] = useState<Customer[]>([]);
   const [divisions, setDivisions] = useState<DivisionOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,9 +52,12 @@ export default function NewQuotationPage() {
   const [quotationNumber, setQuotationNumber] = useState("");
   const [quotationTitle, setQuotationTitle] = useState("");
   const [billDate, setBillDate] = useState(new Date().toISOString().split("T")[0]);
-  const [customerId, setCustomerId] = useState("");
-  const [customerSearch, setCustomerSearch] = useState("");
-  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [buyerType, setBuyerType] = useState<"CUSTOMER" | "DEALER">(
+    searchParams.get("buyerType") === "DEALER" ? "DEALER" : "CUSTOMER"
+  );
+  const [memberId, setMemberId] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
+  const [showMemberDropdown, setShowMemberDropdown] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [includeGst, setIncludeGst] = useState(true);
@@ -59,22 +65,39 @@ export default function NewQuotationPage() {
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("1. Prices are valid for 30 days from the date of quotation.\n2. 50% advance payment required to confirm the order.\n3. Balance payment due before installation.\n4. Installation timeline: 4-6 weeks from order confirmation.\n5. 1-year warranty on all equipment and installation.");
 
-  const [newCustomer, setNewCustomer] = useState(false);
-  const [newCustName, setNewCustName] = useState("");
-  const [newCustMobile, setNewCustMobile] = useState("");
-  const [newCustEmail, setNewCustEmail] = useState("");
+  const [newMember, setNewMember] = useState(false);
+  const [newMemberName, setNewMemberName] = useState("");
+  const [newMemberMobile, setNewMemberMobile] = useState("");
+  const [newMemberEmail, setNewMemberEmail] = useState("");
+
+  const buyerLabel = buyerType === "CUSTOMER" ? "Customer" : "Dealer";
+  const members = buyerType === "CUSTOMER" ? customers : dealers;
+
+  const switchBuyerType = (type: "CUSTOMER" | "DEALER") => {
+    setBuyerType(type);
+    setMemberId("");
+    setMemberSearch("");
+    setShowMemberDropdown(false);
+    setNewMember(false);
+    setNewMemberName("");
+    setNewMemberMobile("");
+    setNewMemberEmail("");
+  };
 
   const loadData = useCallback(async () => {
-    const [iRes, tRes, cRes, dRes] = await Promise.all([
+    const [iRes, tRes, cRes, dlRes, dRes] = await Promise.all([
       fetch("/api/items?all=true"),
       fetch("/api/templates"),
       fetch("/api/customers?limit=500"),
+      fetch("/api/dealers?limit=500"),
       fetch("/api/divisions"),
     ]);
     setAllItems(await iRes.json());
     setTemplates(await tRes.json());
     const cData = await cRes.json();
     setCustomers(cData.customers || []);
+    const dlData = await dlRes.json();
+    setDealers(dlData.dealers || []);
     const divs: DivisionOption[] = await dRes.json();
     setDivisions(divs);
     if (divs.length > 0) {
@@ -130,41 +153,42 @@ export default function NewQuotationPage() {
       return;
     }
 
-    let custId = customerId;
+    let buyerId = memberId;
+    const buyerApiBase = buyerType === "CUSTOMER" ? "/api/customers" : "/api/dealers";
 
-    if (newCustomer) {
-      if (!newCustName || !newCustMobile) {
-        toast.error("Customer name and mobile are required");
+    if (newMember) {
+      if (!newMemberName || !newMemberMobile) {
+        toast.error(`${buyerLabel} name and mobile are required`);
         return;
       }
-      const mobileDigits = newCustMobile.replace(/\D/g, "");
+      const mobileDigits = newMemberMobile.replace(/\D/g, "");
       const mobileLocal = mobileDigits.length === 12 && mobileDigits.startsWith("91") ? mobileDigits.slice(2) : mobileDigits;
       if (!/^[6-9]\d{9}$/.test(mobileLocal)) {
         toast.error("Enter a valid 10-digit mobile number");
         return;
       }
-      if (newCustEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newCustEmail)) {
+      if (newMemberEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newMemberEmail)) {
         toast.error("Enter a valid email address");
         return;
       }
       setSaving(true);
-      const custRes = await fetch("/api/customers", {
+      const memberRes = await fetch(buyerApiBase, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newCustName, mobile: newCustMobile, email: newCustEmail }),
+        body: JSON.stringify({ name: newMemberName, mobile: newMemberMobile, email: newMemberEmail }),
       });
-      if (!custRes.ok) {
-        const custErr = await custRes.json().catch(() => null);
-        toast.error(custErr?.error || "Failed to create customer");
+      if (!memberRes.ok) {
+        const memberErr = await memberRes.json().catch(() => null);
+        toast.error(memberErr?.error || `Failed to create ${buyerLabel.toLowerCase()}`);
         setSaving(false);
         return;
       }
-      const cust = await custRes.json();
-      custId = cust.id;
+      const member = await memberRes.json();
+      buyerId = member.id;
     }
 
-    if (!custId) {
-      toast.error("Select or create a customer");
+    if (!buyerId) {
+      toast.error(`Select or create a ${buyerLabel.toLowerCase()}`);
       return;
     }
 
@@ -174,7 +198,7 @@ export default function NewQuotationPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        customerId: custId,
+        customerId: buyerId,
         templateId: selectedTemplate && selectedTemplate !== "none" ? selectedTemplate : null,
         title: quotationTitle || null,
         quotationNumber: quotationNumber.trim() || null,
@@ -211,10 +235,10 @@ export default function NewQuotationPage() {
     setSaving(false);
   };
 
-  const filteredCustomers = customers.filter((c) =>
-    customerSearch.length >= 2 &&
-    (c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-      c.mobile.includes(customerSearch))
+  const filteredMembers = members.filter((m) =>
+    memberSearch.length >= 2 &&
+    (m.name.toLowerCase().includes(memberSearch.toLowerCase()) ||
+      m.mobile.includes(memberSearch))
   );
 
   if (loading) {
@@ -276,59 +300,65 @@ export default function NewQuotationPage() {
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Customer Details</CardTitle>
+            <CardTitle className="text-base">Buyer Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {!newCustomer ? (
+            <Tabs value={buyerType} onValueChange={(v: string | null) => switchBuyerType((v as "CUSTOMER" | "DEALER") || "CUSTOMER")}>
+              <TabsList className="grid grid-cols-2 w-[240px]">
+                <TabsTrigger value="CUSTOMER" className="w-full">Customer</TabsTrigger>
+                <TabsTrigger value="DEALER" className="w-full">Dealer</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            {!newMember ? (
               <div className="space-y-2">
-                <Label>Search Customer *</Label>
+                <Label>Search {buyerLabel} *</Label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     className="pl-10"
                     placeholder="Type name or mobile (2+ chars)..."
-                    value={customerSearch}
-                    onChange={(e) => { setCustomerSearch(e.target.value); setShowCustomerDropdown(true); }}
-                    onFocus={() => setShowCustomerDropdown(true)}
+                    value={memberSearch}
+                    onChange={(e) => { setMemberSearch(e.target.value); setShowMemberDropdown(true); }}
+                    onFocus={() => setShowMemberDropdown(true)}
                   />
-                  {showCustomerDropdown && filteredCustomers.length > 0 && (
+                  {showMemberDropdown && filteredMembers.length > 0 && (
                     <div className="absolute z-50 w-full mt-1 border rounded-lg bg-popover shadow-lg max-h-48 overflow-y-auto">
-                      {filteredCustomers.map((c) => (
+                      {filteredMembers.map((m) => (
                         <button
-                          key={c.id}
+                          key={m.id}
                           className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex justify-between"
                           onClick={() => {
-                            setCustomerId(c.id);
-                            setCustomerSearch(c.name);
-                            setShowCustomerDropdown(false);
+                            setMemberId(m.id);
+                            setMemberSearch(m.name);
+                            setShowMemberDropdown(false);
                           }}
                         >
-                          <span className="font-medium">{c.name}</span>
-                          <span className="text-muted-foreground">{c.mobile}</span>
+                          <span className="font-medium">{m.name}</span>
+                          <span className="text-muted-foreground">{m.mobile}</span>
                         </button>
                       ))}
                     </div>
                   )}
                 </div>
-                {customerId && (
-                  <p className="text-xs text-emerald-400">Customer selected: {customers.find((c) => c.id === customerId)?.name}</p>
+                {memberId && (
+                  <p className="text-xs text-emerald-400">{buyerLabel} selected: {members.find((m) => m.id === memberId)?.name}</p>
                 )}
-                <Button variant="link" className="text-xs p-0 h-auto" onClick={() => setNewCustomer(true)}>
-                  + Add new customer
+                <Button variant="link" className="text-xs p-0 h-auto" onClick={() => setNewMember(true)}>
+                  + Add new {buyerLabel.toLowerCase()}
                 </Button>
               </div>
             ) : (
               <div className="space-y-3 p-3 border rounded-lg">
                 <div className="flex items-center justify-between">
-                  <Label className="font-semibold">New Customer</Label>
-                  <Button variant="link" className="text-xs p-0 h-auto" onClick={() => setNewCustomer(false)}>
+                  <Label className="font-semibold">New {buyerLabel}</Label>
+                  <Button variant="link" className="text-xs p-0 h-auto" onClick={() => setNewMember(false)}>
                     Search existing
                   </Button>
                 </div>
-                <Input placeholder="Full Name *" value={newCustName} onChange={(e) => setNewCustName(e.target.value)} />
+                <Input placeholder="Full Name *" value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} />
                 <div className="grid grid-cols-2 gap-3">
-                  <Input placeholder="Mobile *" value={newCustMobile} onChange={(e) => setNewCustMobile(e.target.value)} />
-                  <Input placeholder="Email" type="email" value={newCustEmail} onChange={(e) => setNewCustEmail(e.target.value)} />
+                  <Input placeholder="Mobile *" value={newMemberMobile} onChange={(e) => setNewMemberMobile(e.target.value)} />
+                  <Input placeholder="Email" type="email" value={newMemberEmail} onChange={(e) => setNewMemberEmail(e.target.value)} />
                 </div>
               </div>
             )}

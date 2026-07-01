@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withAuth, jsonResponse, errorResponse, clampLimit, isValidDate, validateEnum } from "@/lib/api-helpers";
+import { MemberType } from "@/generated/prisma/client";
 import { calculateQuotationTotals, generateQuotationNumber } from "@/lib/quotation-calc";
 import { QuotationStatus } from "@/generated/prisma/client";
 
@@ -9,6 +10,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const search = searchParams.get("search") || "";
+    const buyerType = searchParams.get("buyerType");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = clampLimit(parseInt(searchParams.get("limit") || "20"));
 
@@ -18,6 +20,12 @@ export async function GET(request: NextRequest) {
         return errorResponse("Invalid status value");
       }
       where.status = status;
+    }
+    if (buyerType) {
+      if (!validateEnum(buyerType, Object.values(MemberType))) {
+        return errorResponse("Invalid buyer type value");
+      }
+      where.customer = { type: buyerType };
     }
     if (search) {
       where.OR = [

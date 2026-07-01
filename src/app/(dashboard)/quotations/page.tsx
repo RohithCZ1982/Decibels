@@ -12,7 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, FileText } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Search, FileText, Users, Handshake } from "lucide-react";
 import Link from "next/link";
 
 interface Quotation {
@@ -43,13 +44,14 @@ export default function QuotationsPage() {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
+  const [buyerType, setBuyerType] = useState<"CUSTOMER" | "DEALER">("CUSTOMER");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams({ search, page: page.toString() });
+    const params = new URLSearchParams({ search, page: page.toString(), buyerType });
     if (status !== "all") params.set("status", status);
 
     const res = await fetch(`/api/quotations?${params}`);
@@ -57,7 +59,7 @@ export default function QuotationsPage() {
     setQuotations(data.quotations || []);
     setTotalPages(data.totalPages || 1);
     setLoading(false);
-  }, [search, status, page]);
+  }, [search, status, buyerType, page]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -68,10 +70,17 @@ export default function QuotationsPage() {
           <h1 className="text-xl md:text-2xl font-bold">Quotations</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Manage quotes and project lifecycle</p>
         </div>
-        <Link href="/quotations/new">
+        <Link href={`/quotations/new?buyerType=${buyerType}`}>
           <Button size="sm" className="md:size-default"><Plus className="w-4 h-4 md:mr-2" /> <span className="hidden md:inline">New Quotation</span></Button>
         </Link>
       </div>
+
+      <Tabs value={buyerType} onValueChange={(v: string | null) => { setBuyerType((v as "CUSTOMER" | "DEALER") || "CUSTOMER"); setPage(1); }}>
+        <TabsList className="grid grid-cols-2 w-[280px]">
+          <TabsTrigger value="CUSTOMER" className="w-full"><Users className="w-4 h-4 mr-1.5" /> Customers</TabsTrigger>
+          <TabsTrigger value="DEALER" className="w-full"><Handshake className="w-4 h-4 mr-1.5" /> Dealer</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <div className="flex flex-wrap gap-2 md:gap-3">
         <div className="relative flex-1 min-w-[180px] md:min-w-[240px]">

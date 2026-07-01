@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const limit = clampLimit(parseInt(searchParams.get("limit") || "50"));
 
     const where = {
-      type: "CUSTOMER" as const,
+      type: "DEALER" as const,
       ...(search
         ? {
             OR: [
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
         : {}),
     };
 
-    const [customers, total] = await Promise.all([
+    const [dealers, total] = await Promise.all([
       prisma.customer.findMany({
         where,
         include: { _count: { select: { quotations: true } } },
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       prisma.customer.count({ where }),
     ]);
 
-    return jsonResponse({ customers, total, page, totalPages: Math.ceil(total / limit) });
+    return jsonResponse({ dealers, total, page, totalPages: Math.ceil(total / limit) });
   });
 }
 
@@ -47,9 +47,9 @@ export async function POST(request: NextRequest) {
     if (email && !isValidEmail(email)) return errorResponse("Enter a valid email address");
     if (gstNumber && !isValidGSTNumber(gstNumber)) return errorResponse("Enter a valid 15-character GST number");
 
-    const customer = await prisma.customer.create({
-      data: { name, mobile, email, address, gstNumber, notes, type: "CUSTOMER" },
+    const dealer = await prisma.customer.create({
+      data: { name, mobile, email, address, gstNumber, notes, type: "DEALER" },
     });
-    return jsonResponse(customer, 201);
+    return jsonResponse(dealer, 201);
   });
 }

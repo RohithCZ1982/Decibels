@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Customers", href: "/customers", icon: Users },
+  { name: "Members", href: "/customers", icon: Users },
   { name: "Quotations", href: "/quotations", icon: FileText },
   { name: "Items", href: "/items", icon: Package, adminOnly: true },
   { name: "Categories", href: "/categories", icon: FolderTree, adminOnly: true },
